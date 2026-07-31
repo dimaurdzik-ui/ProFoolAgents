@@ -1,24 +1,24 @@
 /**
  * remote-lifecycle.ts
  *
- * Pure, electron-free remote Hermes dashboard lifecycle over SSH for Desktop
+ * Pure, electron-free remote Pixel Agents dashboard lifecycle over SSH for Desktop
  * SSH remote mode. Composes an SshConnection (injected) with HTTP probes
  * through the established tunnel (injected fetch) and the served-token adoption
  * step (injected). Knows how to:
  *
- *   - locate the Hermes install on the remote (login-shell probe),
+ *   - locate the Pixel Agents install on the remote (login-shell probe),
  *   - gate the remote platform to Linux/macOS via `uname`,
  *   - reuse an existing desktop-dedicated dashboard via a lockfile + an
  *     AUTHENTICATED /api/status probe (pid liveness alone is insufficient),
  *   - spawn a fresh detached `--isolated --port 0` dashboard and scrape its
- *     `HERMES_DASHBOARD_READY port=<n>` readiness line,
+ *     `PIXEL_AGENTS_DASHBOARD_READY port=<n>` readiness line,
  *   - adopt the token the dashboard actually serves (served-token adoption),
  *   - clean up a stale dashboard only when it is provably ours.
  *
  * No `import 'electron'` so it's unit-testable with `node --test`. main.ts wires
- * the real SshConnection, fetch, adoptServedDashboardToken, and waitForHermes in.
+ * the real SshConnection, fetch, adoptServedDashboardToken, and waitForPixelAgents in.
  *
- * The minted HERMES_DASHBOARD_SESSION_TOKEN is the SPAWN credential. After
+ * The minted PIXEL_AGENTS_DASHBOARD_SESSION_TOKEN is the SPAWN credential. After
  * readiness the caller runs served-token adoption against the tunneled baseUrl
  * and the SERVED token's fingerprint is what lands in the lockfile — so the
  * reuse probe checks the credential that actually authenticates /api/ws, not
@@ -32,8 +32,8 @@ const LOCKFILE_SCHEMA_VERSION = 2
 // an old running dashboard unsafe to reattach to (token handling, readiness/spawn
 // args, served-token reconciliation). A mismatch forces a clean respawn.
 const PROTOCOL_VERSION = 1
-const READY_RE = /^HERMES_(?:BACKEND|DASHBOARD)_READY port=(\d+)/m
-const REMOTE_LOCK_DIR = '~/.hermes/desktop-ssh'
+const READY_RE = /^PIXEL_AGENTS_(?:BACKEND|DASHBOARD)_READY port=(\d+)/m
+const REMOTE_LOCK_DIR = '~/.pixel-agents/desktop-ssh'
 const SUPPORTED_REMOTE_OS = new Set(['Linux', 'Darwin'])
 const DEFAULT_READY_TIMEOUT_MS = 45_000
 const READY_POLL_INTERVAL_MS = 750
@@ -122,11 +122,11 @@ function expandRemotePath(p) {
   return shq(p)
 }
 
-// Resolve the remote hermes executable. An EXPLICIT path is honored strictly
+// Resolve the remote pixel-agents executable. An EXPLICIT path is honored strictly
 // (throws a path-naming error if not executable — never silently falls back to a
 // different install). A BLANK path auto-detects: login-shell `command -v` (a
 // non-login `ssh host cmd` PATH misses user installs), then known install paths.
-async function locateHermes(ssh, remoteHermesPath) {
+async function locatePixelAgents(ssh, remotePixelAgentsPath) {
   const resolveLauncher = async (candidate: string) => {
     const script =
       'import os,shlex,sys\n' +
@@ -159,25 +159,25 @@ async function locateHermes(ssh, remoteHermesPath) {
     }
   }
 
-  if (remoteHermesPath) {
-    if (await isExecutable(remoteHermesPath)) {
-      return resolveLauncher(remoteHermesPath)
+  if (remotePixelAgentsPath) {
+    if (await isExecutable(remotePixelAgentsPath)) {
+      return resolveLauncher(remotePixelAgentsPath)
     }
 
     const err: any = new Error(
-      `The Hermes path you set is not an executable on the remote host: "${remoteHermesPath}". ` +
-        'Check the path (it must be the full path to the `hermes` binary on the remote, e.g. ' +
-        '~/hermes-agent/.venv/bin/hermes), or clear it to auto-detect.'
+      `The Pixel Agents path you set is not an executable on the remote host: "${remotePixelAgentsPath}". ` +
+        'Check the path (it must be the full path to the `pixel-agents` binary on the remote, e.g. ' +
+        '~/pixel-agents/.venv/bin/pixel-agents), or clear it to auto-detect.'
     )
 
-    err.kind = 'hermes-not-found'
+    err.kind = 'pixel-agents-not-found'
     throw err
   }
 
   const candidates: string[] = []
 
   try {
-    const found = (await ssh.exec(`bash -lc ${shq('command -v hermes')}`)).trim()
+    const found = (await ssh.exec(`bash -lc ${shq('command -v pixel-agents')}`)).trim()
 
     if (found) {
       candidates.push(found.split('\n').pop().trim())
@@ -188,9 +188,9 @@ async function locateHermes(ssh, remoteHermesPath) {
 
   // Fallback candidates when the login-shell probe misses: the installer's
   // command locations (scripts/install.sh) — per-user, root/FHS, legacy venv.
-  candidates.push('~/.local/bin/hermes')
-  candidates.push('/usr/local/bin/hermes')
-  candidates.push('~/.hermes/hermes-agent/venv/bin/hermes')
+  candidates.push('~/.local/bin/pixel-agents')
+  candidates.push('/usr/local/bin/pixel-agents')
+  candidates.push('~/.pixel-agents/pixel-agents/venv/bin/pixel-agents')
 
   for (const candidate of candidates) {
     if (!candidate) {
@@ -203,21 +203,21 @@ async function locateHermes(ssh, remoteHermesPath) {
   }
 
   const err: any = new Error(
-    'Hermes is not installed on the remote host (could not find a `hermes` executable). ' +
-      'Install it on the remote with:  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | sh  ' +
-      '— or set the Hermes path explicitly in the SSH connection settings.'
+    'Pixel Agents is not installed on the remote host (could not find a `pixel-agents` executable). ' +
+      'Install it on the remote with:  curl -fsSL https://api.pixelagents.com/install.sh | sh  ' +
+      '— or set the Pixel Agents path explicitly in the SSH connection settings.'
   )
 
-  err.kind = 'hermes-not-found'
+  err.kind = 'pixel-agents-not-found'
   throw err
 }
 
-// Probe the resolved binary's version string (first line of `<hermes> --version`,
-// e.g. "Hermes Agent v0.18.2 ..."), or '' on failure. Surfaces WHICH hermes a
+// Probe the resolved binary's version string (first line of `<pixel-agents> --version`,
+// e.g. "Pixel Agents v0.18.2 ..."), or '' on failure. Surfaces WHICH pixel-agents a
 // connection uses, so a stale/unexpected install is visible.
-async function probeHermesVersion(ssh, hermesPath) {
+async function probePixelAgentsVersion(ssh, pixelAgentsPath) {
   try {
-    const out = (await ssh.exec(`${expandRemotePath(hermesPath)} --version 2>&1`)).trim()
+    const out = (await ssh.exec(`${expandRemotePath(pixelAgentsPath)} --version 2>&1`)).trim()
 
     return (out.split('\n')[0] || '').trim()
   } catch {
@@ -232,7 +232,7 @@ async function probeRemotePlatform(ssh) {
 
   if (!SUPPORTED_REMOTE_OS.has(osName)) {
     const err: any = new Error(
-      `Unsupported remote platform "${osName || 'unknown'}". Hermes Desktop SSH mode supports Linux, macOS, and Windows remote hosts.`
+      `Unsupported remote platform "${osName || 'unknown'}". Pixel Agents Desktop SSH mode supports Linux, macOS, and Windows remote hosts.`
     )
 
     err.kind = 'unsupported-platform'
@@ -242,16 +242,16 @@ async function probeRemotePlatform(ssh) {
   return { os: osName, arch }
 }
 
-// The HERMES_HOME the remote dashboard will use (explicit env wins, else
-// ~/.hermes). Recorded in the lockfile so a future reuse can tell it's the same
+// The PIXEL_AGENTS_HOME the remote dashboard will use (explicit env wins, else
+// ~/.pixel-agents). Recorded in the lockfile so a future reuse can tell it's the same
 // state store; best-effort.
-async function probeRemoteHermesHome(ssh) {
+async function probeRemotePixelAgentsHome(ssh) {
   try {
-    const out = (await ssh.exec('echo "${HERMES_HOME:-$HOME/.hermes}"')).trim().split('\n').pop()
+    const out = (await ssh.exec('echo "${PIXEL_AGENTS_HOME:-$HOME/.pixel-agents}"')).trim().split('\n').pop()
 
-    return out || '~/.hermes'
+    return out || '~/.pixel-agents'
   } catch (cause) {
-    const error: any = new Error('Could not resolve the remote Hermes home.')
+    const error: any = new Error('Could not resolve the remote Pixel Agents home.')
     error.kind = 'transient-transport-error'
     error.cause = cause
     throw error
@@ -318,7 +318,7 @@ async function readLockfile(ssh, ownershipId) {
     return null
   }
 
-  for (const field of ['profile', 'hermesPath', 'hermesHome', 'logPath', 'startedAt']) {
+  for (const field of ['profile', 'pixelAgentsPath', 'pixelAgentsHome', 'logPath', 'startedAt']) {
     if (typeof parsed[field] !== 'string' || parsed[field].length > 1024) {
       return null
     }
@@ -368,8 +368,8 @@ async function remotePidAlive(ssh, pid) {
 
 // A pid is "provably ours" only if its remote cmdline carries our dashboard
 // args — never kill a pid we can't positively identify as our dashboard.
-async function pidIsOurDashboard(ssh, pid, spawnNonce, hermesPath = '') {
-  if (!pid || !/^[0-9a-f]{16}$/.test(String(spawnNonce || '')) || !hermesPath) {
+async function pidIsOurDashboard(ssh, pid, spawnNonce, pixelAgentsPath = '') {
+  if (!pid || !/^[0-9a-f]{16}$/.test(String(spawnNonce || '')) || !pixelAgentsPath) {
     return false
   }
 
@@ -377,7 +377,7 @@ async function pidIsOurDashboard(ssh, pid, spawnNonce, hermesPath = '') {
     const script =
       'import os,shlex,subprocess,sys\n' +
       `pid=${Number(pid)}\n` +
-      `expected=os.path.expanduser(${shq(hermesPath)})\n` +
+      `expected=os.path.expanduser(${shq(pixelAgentsPath)})\n` +
       `nonce=${shq(spawnNonce)}\n` +
       'try:\n' +
       ' raw=open(f"/proc/{pid}/cmdline","rb").read()\n' +
@@ -408,7 +408,7 @@ async function pidIsOurDashboard(ssh, pid, spawnNonce, hermesPath = '') {
 
 // Kill the stale dashboard ONLY if provably ours, then drop the lockfile.
 async function cleanupStale(ssh, ownershipId, lock, pidAlive = true) {
-  if (pidAlive && lock && (await pidIsOurDashboard(ssh, lock.pid, lock.spawnNonce, lock.hermesPath))) {
+  if (pidAlive && lock && (await pidIsOurDashboard(ssh, lock.pid, lock.spawnNonce, lock.pixelAgentsPath))) {
     try {
       const result = (
         await ssh.exec(
@@ -443,15 +443,15 @@ async function cleanupStale(ssh, ownershipId, lock, pidAlive = true) {
 // Detach so the backend survives the SSH channel closing: setsid (Linux)
 // starts a new session; macOS has no setsid, so fall back to nohup (HUP-immune;
 // fd-detachment is already handled by </dev/null + redirect + &).
-function buildSpawnCommand(hermesPath, profile, opts: any = {}) {
-  const hermes = expandRemotePath(hermesPath)
+function buildSpawnCommand(pixelAgentsPath, profile, opts: any = {}) {
+  const pixelAgents = expandRemotePath(pixelAgentsPath)
   const profileArgs = profile ? `--profile ${shq(profile)} ` : ''
   const logPath = expandRemotePath(opts.logPath)
   const tokenFilePath = opts.tokenFilePath
   const tokenArg = tokenFilePath ? ` --ssh-session-token-file ${expandRemotePath(tokenFilePath)}` : ''
   const ownerArg = opts.spawnNonce ? ` --ssh-owner-nonce ${validateSpawnNonce(opts.spawnNonce)}` : ''
   const subCmd = `serve --isolated --host 127.0.0.1 --port 0${tokenArg}${ownerArg}`
-  const dashCmd = `env HERMES_DESKTOP=1 ${hermes} ${profileArgs}${subCmd}`
+  const dashCmd = `env PIXEL_AGENTS_DESKTOP=1 ${pixelAgents} ${profileArgs}${subCmd}`
 
   return (
     `mkdir -p "$(dirname ${logPath})" && ` +
@@ -459,11 +459,11 @@ function buildSpawnCommand(hermesPath, profile, opts: any = {}) {
   )
 }
 
-async function remoteSupportsSshOwnership(ssh, hermesPath) {
-  const hermes = expandRemotePath(hermesPath)
+async function remoteSupportsSshOwnership(ssh, pixelAgentsPath) {
+  const pixelAgents = expandRemotePath(pixelAgentsPath)
 
   const out = await ssh.exec(
-    `help="$(${hermes} serve --help 2>&1)"; ` +
+    `help="$(${pixelAgents} serve --help 2>&1)"; ` +
       `printf '%s' "$help" | grep -q ssh-session-token-file && ` +
       `printf '%s' "$help" | grep -q ssh-owner-nonce && echo YES || echo NO`
   )
@@ -508,11 +508,11 @@ async function scrapeReadyPort(ssh, logPath, { timeoutMs = DEFAULT_READY_TIMEOUT
   throw err
 }
 
-async function spawnRemoteDashboard(ssh, { hermesPath, profile, token, ownershipId }) {
-  if (!(await remoteSupportsSshOwnership(ssh, hermesPath))) {
+async function spawnRemoteDashboard(ssh, { pixelAgentsPath, profile, token, ownershipId }) {
+  if (!(await remoteSupportsSshOwnership(ssh, pixelAgentsPath))) {
     const err: any = new Error(
-      'The remote Hermes install does not support --ssh-session-token-file and --ssh-owner-nonce. ' +
-        'Update Hermes on the remote host to continue using Desktop SSH mode.'
+      'The remote Pixel Agents install does not support --ssh-session-token-file and --ssh-owner-nonce. ' +
+        'Update Pixel Agents on the remote host to continue using Desktop SSH mode.'
     )
 
     err.kind = 'update-required'
@@ -569,7 +569,7 @@ async function spawnRemoteDashboard(ssh, { hermesPath, profile, token, ownership
   let out
 
   try {
-    out = await ssh.exec(buildSpawnCommand(hermesPath, profile, { spawnNonce, tokenFilePath, logPath }))
+    out = await ssh.exec(buildSpawnCommand(pixelAgentsPath, profile, { spawnNonce, tokenFilePath, logPath }))
   } catch (error) {
     try {
       await ssh.exec(`rm -f ${expandRemotePath(tokenFilePath)}`)
@@ -653,7 +653,7 @@ async function openForward(deps, remotePort, attempts = 3) {
 
 /**
  * Establish (or reuse) a remote dashboard and a tunnel to it. `deps` injects the
- * opened SshConnection, forward/pickLocalPort/waitForHermes, a token-gated
+ * opened SshConnection, forward/pickLocalPort/waitForPixelAgents, a token-gated
  * probeReuseProof, and adoptServedToken. Returns the connection descriptor
  * { baseUrl, token, tokenFingerprint, remotePort, localPort, pid, reused, platform }.
  */
@@ -676,11 +676,11 @@ async function connect(deps) {
   const {
     ssh,
     profile = '',
-    remoteHermesPath = '',
+    remotePixelAgentsPath = '',
     ownershipId,
     forward,
     pickLocalPort,
-    waitForHermes,
+    waitForPixelAgents,
     probeReuseProof,
     adoptServedToken,
     rememberLog = () => {},
@@ -693,21 +693,21 @@ async function connect(deps) {
   assertNotAborted(signal)
   const platform = await probeRemotePlatform(ssh)
   log(`remote platform ${platform.os}/${platform.arch}`)
-  const hermesPath = await locateHermes(ssh, remoteHermesPath)
-  log(`located hermes at ${hermesPath}`)
-  const hermesVersion = await probeHermesVersion(ssh, hermesPath)
+  const pixelAgentsPath = await locatePixelAgents(ssh, remotePixelAgentsPath)
+  log(`located pixel-agents at ${pixelAgentsPath}`)
+  const pixelAgentsVersion = await probePixelAgentsVersion(ssh, pixelAgentsPath)
 
-  if (hermesVersion) {
-    log(`remote hermes version: ${hermesVersion}`)
+  if (pixelAgentsVersion) {
+    log(`remote pixel-agents version: ${pixelAgentsVersion}`)
   }
 
   const reuseToken = deps.reuseToken || ''
-  const hermesHome = await probeRemoteHermesHome(ssh)
+  const pixelAgentsHome = await probeRemotePixelAgentsHome(ssh)
   const lock = await readLockfile(ssh, ownershipId)
 
   if (lock) {
     const pidAlive = await remotePidAlive(ssh, lock.pid)
-    const owned = pidAlive && (await pidIsOurDashboard(ssh, lock.pid, lock.spawnNonce, lock.hermesPath))
+    const owned = pidAlive && (await pidIsOurDashboard(ssh, lock.pid, lock.spawnNonce, lock.pixelAgentsPath))
 
     const reusable =
       pidAlive &&
@@ -715,8 +715,8 @@ async function connect(deps) {
       lock.port > 0 &&
       Boolean(reuseToken) &&
       lock.tokenFingerprint === fingerprintToken(reuseToken) &&
-      lock.hermesPath === hermesPath &&
-      lock.hermesHome === hermesHome
+      lock.pixelAgentsPath === pixelAgentsPath &&
+      lock.pixelAgentsHome === pixelAgentsHome
 
     if (reusable) {
       assertNotAborted(signal)
@@ -761,8 +761,8 @@ async function connect(deps) {
             pid: lock.pid,
             reused: true,
             platform,
-            hermesPath,
-            hermesVersion,
+            pixelAgentsPath,
+            pixelAgentsVersion,
             ownershipId,
             spawnNonce: lock.spawnNonce,
             logPath: lock.logPath
@@ -786,7 +786,7 @@ async function connect(deps) {
   const spawnToken = mintToken()
 
   const { pid, spawnNonce, logPath, tokenFilePath } = await spawnRemoteDashboard(ssh, {
-    hermesPath,
+    pixelAgentsPath,
     profile,
     token: spawnToken,
     ownershipId
@@ -800,8 +800,8 @@ async function connect(deps) {
     pid,
     port: 0,
     profile,
-    hermesPath,
-    hermesHome,
+    pixelAgentsPath,
+    pixelAgentsHome,
     logPath,
     tokenFingerprint: fingerprintToken(spawnToken),
     protocolVersion: PROTOCOL_VERSION,
@@ -829,7 +829,7 @@ async function connect(deps) {
     localPort = await openForward(deps, remotePort)
     assertNotAborted(signal)
     const baseUrl = `http://127.0.0.1:${localPort}`
-    await waitForHermes(baseUrl, spawnToken)
+    await waitForPixelAgents(baseUrl, spawnToken)
     assertNotAborted(signal)
 
     const token = await adoptOwnedServedToken(adoptServedToken, baseUrl, spawnToken, ssh, pid, 'remote dashboard')
@@ -848,8 +848,8 @@ async function connect(deps) {
       pid,
       reused: false,
       platform,
-      hermesPath,
-      hermesVersion,
+      pixelAgentsPath,
+      pixelAgentsVersion,
       ownershipId,
       spawnNonce,
       logPath
@@ -879,15 +879,15 @@ export {
   expandRemotePath,
   fingerprintToken,
   isForwardBindCollision,
-  locateHermes,
+  locatePixelAgents,
   LOCKFILE_SCHEMA_VERSION,
   lockfilePath,
   mintToken,
   openForward,
   ownershipDirectory,
   pidIsOurDashboard,
-  probeHermesVersion,
-  probeRemoteHermesHome,
+  probePixelAgentsVersion,
+  probeRemotePixelAgentsHome,
   probeRemotePlatform,
   PROTOCOL_VERSION,
   readLockfile,

@@ -1,6 +1,4 @@
-import { spawn, type SpawnOptions } from 'node:child_process'
-
-import { hiddenWindowsChildOptions } from './windows-child-options'
+import { type SpawnOptions } from 'node:child_process'
 
 export interface UpdaterChild {
   pid?: number
@@ -22,15 +20,8 @@ export function spawnUpdaterProcess(
   updaterArgs: string[],
   options: SpawnOptions,
   deps: SpawnUpdaterProcessDeps = {}
-): UpdaterChild {
-  const isWindows = deps.isWindows ?? process.platform === 'win32'
-  const spawnOptions = hiddenWindowsChildOptions(options, isWindows) as SpawnOptions
+): any {
+  console.log('Pixel Agents: Auto-updates are disabled.')
 
-  const child = deps.spawnProcess
-    ? deps.spawnProcess(updater, updaterArgs, spawnOptions)
-    : spawn(updater, updaterArgs, spawnOptions)
-
-  child.unref()
-
-  return child
+  return { unref: () => {} }
 }

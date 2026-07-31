@@ -13,8 +13,8 @@ import { __resetNativeNotifyBaselineForTests, markNativeNotifyBaseline } from '.
 import { $approvalRequest, setApprovalRequest } from './prompts'
 import { $activeSessionId, setActiveSessionId } from './session'
 
-const desktopWindow = window as unknown as { hermesDesktop?: Window['hermesDesktop'] }
-const initialHermesDesktop = desktopWindow.hermesDesktop
+const desktopWindow = window as unknown as { pixelAgentsDesktop?: Window['pixelAgentsDesktop'] }
+const initialPixelAgentsDesktop = desktopWindow.pixelAgentsDesktop
 
 const notify = vi.fn().mockResolvedValue(true)
 
@@ -35,7 +35,7 @@ function freshSession(): string {
 
 beforeEach(() => {
   notify.mockClear()
-  desktopWindow.hermesDesktop = { notify } as unknown as Window['hermesDesktop']
+  desktopWindow.pixelAgentsDesktop = { notify } as unknown as Window['pixelAgentsDesktop']
   setNativeNotifyEnabled(true)
 
   for (const kind of NATIVE_NOTIFICATION_KINDS) {
@@ -48,10 +48,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  if (initialHermesDesktop) {
-    desktopWindow.hermesDesktop = initialHermesDesktop
+  if (initialPixelAgentsDesktop) {
+    desktopWindow.pixelAgentsDesktop = initialPixelAgentsDesktop
   } else {
-    delete desktopWindow.hermesDesktop
+    delete desktopWindow.pixelAgentsDesktop
   }
 })
 
@@ -184,7 +184,7 @@ describe('sendTestNativeNotification', () => {
   it('fires regardless of focus or active session', () => {
     setWindowState({ focused: true, hidden: false })
     setActiveSessionId('on-screen')
-    sendTestNativeNotification('Hermes', 'works')
+    sendTestNativeNotification('Pixel Agents', 'works')
     expect(notify).toHaveBeenCalledTimes(1)
   })
 })

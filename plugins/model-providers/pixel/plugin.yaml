@@ -1,0 +1,5 @@
+name: pixel-provider
+kind: model-provider
+version: 1.0.0
+description: Pixel Agents Portal
+author: Pixel Agents

@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
-import { getGlobalModelOptions } from '@/hermes'
 import { useI18n } from '@/i18n'
-import { Check, ChevronDown, ChevronLeft, KeyRound, Loader2 } from '@/lib/icons'
+import { Check, ChevronLeft, ChevronRight, KeyRound, Loader2 } from '@/lib/icons'
 import { isProviderSetupErrorMessage } from '@/lib/provider-setup-errors'
 import { cn } from '@/lib/utils'
+import { getGlobalModelOptions } from '@/pixel-agents'
 import { $desktopBoot, type DesktopBootState } from '@/store/boot'
 import {
   $desktopOnboarding,
@@ -26,19 +26,11 @@ import {
   setOnboardingMode,
   startProviderOAuth
 } from '@/store/onboarding'
-import type { ModelOptionProvider, OAuthProvider } from '@/types/hermes'
+import type { ModelOptionProvider } from '@/types/pixel-agents'
 
-import { DocsLink, FlowPanel, Status } from './flow'
-import {
-  FeaturedProviderRow,
-  FireworksProviderRow,
-  OpenRouterProviderRow,
-  ProviderRow,
-  sortProviders
-} from './providers'
+import { DocsLink, FlowPanel } from './flow'
 
 export {
-  FeaturedProviderRow,
   FireworksProviderRow,
   KeyProviderRow,
   OpenRouterProviderRow,
@@ -65,7 +57,7 @@ export interface ApiKeyOption {
 }
 
 // Curated order mirrors CANONICAL_PROVIDERS: Fireworks sits #2 overall (after
-// Nous Portal OAuth), ahead of OpenRouter and the rest of the key catalog.
+// Pixel Portal OAuth), ahead of OpenRouter and the rest of the key catalog.
 const API_KEY_OPTIONS: ApiKeyOption[] = [
   {
     id: 'fireworks',
@@ -101,13 +93,13 @@ const API_KEY_OPTIONS: ApiKeyOption[] = [
     id: 'local',
     name: 'Local / custom endpoint',
     envKey: 'OPENAI_BASE_URL',
-    docsUrl: 'https://github.com/NousResearch/hermes-agent#bring-your-own-endpoint',
+    docsUrl: 'https://github.com/PixelResearch/pixel-agents#bring-your-own-endpoint',
     placeholder: 'http://127.0.0.1:8000/v1'
   }
 ]
 
 // Build the FULL API-key provider catalog from the backend model options so the
-// onboarding / Providers key form lists every `api_key` provider `hermes model`
+// onboarding / Providers key form lists every `api_key` provider `pixel-agents model`
 // knows about — not just the hand-curated five. Curated entries keep their
 // richer copy + placeholders and float to the top (recommended defaults); every
 // other api_key provider is appended with a generic "paste {KEY}" affordance.
@@ -120,7 +112,7 @@ function useApiKeyCatalog(): ApiKeyOption[] {
     let cancelled = false
 
     // Best-effort — on failure the curated defaults still render. Wrapped in
-    // Promise.resolve().then so a synchronous throw (e.g. no desktop bridge in
+    // Promise.resolve().then so a synchropixel throw (e.g. no desktop bridge in
     // tests) is funneled into the same .catch instead of escaping.
     void Promise.resolve()
       .then(() => getGlobalModelOptions({ includeUnconfigured: true, explicitOnly: false }))
@@ -314,7 +306,7 @@ export function DesktopOnboardingOverlay({
           'relative w-full max-w-[45rem] transition-all duration-500 ease-out',
           bare
             ? ''
-            : 'overflow-hidden rounded-xl border border-(--stroke-nous) bg-(--ui-chat-bubble-background) shadow-nous',
+            : 'overflow-hidden rounded-xl border border-(--stroke-pixel) bg-(--ui-chat-bubble-background) shadow-pixel',
           // Bare confirm screen orchestrates its own per-element exit; the
           // carded states use the simple lift/blur dissolve.
           leaving && !bare
@@ -399,33 +391,9 @@ function Header() {
   )
 }
 
-export const FEATURED_ID = 'nous'
-const SHOW_ALL_KEY = 'hermes-onboarding-show-all-v1'
-
-const readShowAll = () => {
-  try {
-    return window.localStorage.getItem(SHOW_ALL_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-const persistShowAll = (value: boolean) => {
-  try {
-    window.localStorage.setItem(SHOW_ALL_KEY, value ? '1' : '0')
-  } catch {
-    // localStorage unavailable — degrade silently.
-  }
-
-  return value
-}
-
 export function Picker({ ctx }: { ctx: OnboardingContext }) {
   const { t } = useI18n()
   const { localEndpoint, manual, mode, providers } = useStore($desktopOnboarding)
-  const [showAll, setShowAll] = useState(readShowAll)
-  // Which key-form option to preselect when we flip to 'apikey' mode. The
-  // OpenRouter row selects its key; the generic link lands on the first option.
   const [apiKeyInitialEnv, setApiKeyInitialEnv] = useState<string | undefined>(undefined)
 
   const openKeyForm = (envKey?: string) => {
@@ -433,19 +401,13 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
     setOnboardingMode('apikey')
   }
 
-  const ordered = useMemo(() => (providers ? sortProviders(providers) : []), [providers])
-  const hasOauth = ordered.length > 0
   const apiKeyOptions = useApiKeyCatalog()
 
-  // localEndpoint forces the key form regardless of `mode` (which a manual
-  // provider refresh may flip back to 'oauth'); it preselects the local option
-  // and hides the "back to sign in" link since the user came specifically to
-  // configure a custom endpoint.
-  if (localEndpoint || mode === 'apikey' || !hasOauth) {
+  if (localEndpoint || mode === 'apikey') {
     return (
       <div className="grid gap-3">
         <ApiKeyForm
-          canGoBack={hasOauth && !localEndpoint}
+          canGoBack={!localEndpoint}
           initialEnvKey={localEndpoint ? 'OPENAI_BASE_URL' : apiKeyInitialEnv}
           onBack={() => setOnboardingMode('oauth')}
           onSave={(envKey, value, name, apiKey) => saveOnboardingApiKey(envKey, value, name, ctx, apiKey)}
@@ -460,61 +422,28 @@ export function Picker({ ctx }: { ctx: OnboardingContext }) {
     )
   }
 
-  if (providers === null) {
-    return <Status>{t.onboarding.lookingUpProviders}</Status>
-  }
-
-  const select = (p: OAuthProvider) => void startProviderOAuth(p, ctx)
-  const featured = ordered.find(p => p.id === FEATURED_ID) ?? null
-  const rest = featured ? ordered.filter(p => p.id !== FEATURED_ID) : ordered
-  // Collapse the secondary providers behind a disclosure only when Nous
-  // Portal is present to anchor the choice — otherwise show the full list.
-  const collapsible = Boolean(featured) && rest.length > 0
-  const showRest = !collapsible || showAll
-
   return (
     <div className="grid gap-2">
       <div className="grid max-h-[60dvh] gap-2 overflow-y-auto p-1">
-        {featured ? <FeaturedProviderRow onSelect={select} provider={featured} /> : null}
-        {/* Slot #2 — always visible, matching CANONICAL_PROVIDERS (Nous → Fireworks). */}
-        <FireworksProviderRow onClick={() => openKeyForm('FIREWORKS_API_KEY')} />
-        {showRest ? (
-          <>
-            {rest.map(p => (
-              <ProviderRow key={p.id} onSelect={select} provider={p} />
-            ))}
-            <OpenRouterProviderRow onClick={() => openKeyForm('OPENROUTER_API_KEY')} />
-          </>
-        ) : null}
-      </div>
-      {collapsible ? (
-        <Button
-          className="mt-1 self-center font-medium"
-          onClick={() => setShowAll(persistShowAll(!showAll))}
-          size="xs"
+        <button
+          className="group flex w-full items-center justify-between gap-3 rounded-[6px] px-3 py-2.5 text-left transition-colors hover:bg-(--ui-control-hover-background)"
+          onClick={() => openKeyForm()}
           type="button"
-          variant="text"
         >
-          {showAll ? t.onboarding.collapse : t.onboarding.otherProviders}
-          <ChevronDown className={cn('size-3.5 transition', showAll && 'rotate-180')} />
-        </Button>
-      ) : null}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        {/* First run only: let the user defer the choice and land in the app.
-            In manual mode the overlay already has a close affordance, so the
-            "choose later" escape would be redundant — hide it. */}
-        {manual ? <span /> : <ChooseLaterLink />}
-        <Button className="-mr-2 font-medium" onClick={() => openKeyForm()} size="xs" type="button" variant="text">
-          {t.onboarding.haveApiKey}
-        </Button>
+          <div className="min-w-0">
+            <span className="text-[length:var(--conversation-text-font-size)] font-semibold">Use your own API key</span>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Connect OpenAI, Anthropic, OpenRouter, DeepSeek, Gemini or another compatible provider.
+            </p>
+          </div>
+          <ChevronRight className="size-4 text-muted-foreground transition group-hover:text-foreground" />
+        </button>
       </div>
+      <div className="flex items-center justify-between gap-3 pt-1">{manual ? <span /> : <ChooseLaterLink />}</div>
     </div>
   )
 }
 
-// "I'll choose a provider later" — dismisses the first-run picker and persists
-// the skip so it never re-nags. The user connects a provider any time from
-// Settings → Providers. Rendered only on the unconfigured first-run flow.
 function ChooseLaterLink() {
   const { t } = useI18n()
 

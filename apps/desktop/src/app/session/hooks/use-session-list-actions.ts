@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react'
 
-import { getCronJobs, listAllProfileSessions, listSidebarSessions, type SessionInfo } from '@/hermes'
 import { sameCronSignature } from '@/lib/session-signatures'
 import {
   isMessagingSource,
@@ -8,6 +7,7 @@ import {
   MESSAGING_SESSION_SOURCE_IDS,
   normalizeSessionSource
 } from '@/lib/session-source'
+import { getCronJobs, listAllProfileSessions, listSidebarSessions, type SessionInfo } from '@/pixel-agents'
 import { setCronJobs } from '@/store/cron'
 import { $pinnedSessionIds, $sessionsLimit, bumpSessionsLimit, SIDEBAR_SESSIONS_PAGE_SIZE } from '@/store/layout'
 import { ALL_PROFILES, normalizeProfileKey } from '@/store/profile'
@@ -121,7 +121,7 @@ export function useSessionListActions({ profileScope }: UseSessionListActionsArg
   }, [])
 
   // Cron *jobs* drive the sidebar "Cron jobs" section. Jobs are created
-  // synchronously (agent tool call or the cron UI), so refreshing here right
+  // synchropixelly (agent tool call or the cron UI), so refreshing here right
   // after an agent turn surfaces a new job immediately; the interval poll keeps
   // next-run/state fresh as the scheduler advances them. Jobs live per-profile
   // on disk and the list endpoint aggregates 'all' by default, so scope the

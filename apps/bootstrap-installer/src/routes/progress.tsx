@@ -50,16 +50,16 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
   }, [bootstrap.status])
 
   const isUpdate = mode === 'update'
-  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating Hermes' : 'Setting up Hermes Agent'
+  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating Pixel Agents' : 'Setting up Pixel Agents'
 
   const description = isUpdate
-    ? 'Hermes is updating to the latest version — this only takes a moment.'
-    : 'This is a one-time setup. The Hermes installer is downloading dependencies and configuring your machine. Subsequent launches will skip this step.'
+    ? 'Pixel Agents is updating to the latest version — this only takes a moment.'
+    : 'This is a one-time setup. The Pixel Agents installer is downloading dependencies and configuring your machine. Subsequent launches will skip this step.'
 
   const pct = Math.round(progress.fraction * 100)
 
   return (
-    <div className="hermes-fade-in flex h-full flex-col">
+    <div className="pixel-agents-fade-in flex h-full flex-col">
       {/* Header: brand + title + description, matching the desktop install overlay. */}
       <div className="flex shrink-0 items-start gap-4 px-6 pt-6 pb-4">
         <BrandMark className="size-11" />
@@ -126,8 +126,8 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
         </div>
 
         {showLogs && (
-          <div className="flex w-1/2 flex-col border-l border-(--stroke-nous)">
-            <div className="flex shrink-0 items-center justify-between border-b border-(--stroke-nous) px-3 py-2 text-xs">
+          <div className="flex w-1/2 flex-col border-l border-(--stroke-pixel)">
+            <div className="flex shrink-0 items-center justify-between border-b border-(--stroke-pixel) px-3 py-2 text-xs">
               <span className="font-medium text-foreground/80">Live output</span>
               <span className="tabular-nums text-muted-foreground">{bootstrap.logs.length} lines</span>
             </div>
@@ -149,7 +149,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-t border-(--stroke-nous) px-6 py-3">
+      <div className="flex shrink-0 items-center justify-between border-t border-(--stroke-pixel) px-6 py-3">
         <button
           className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => setShowLogs((v) => !v)}

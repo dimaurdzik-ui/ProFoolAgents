@@ -12,7 +12,7 @@ authors:
   - haileymarshall
 license: MIT
 metadata:
-  hermes:
+  pixel-agents:
     tags: [health, fitness, nutrition, gym, workout, diet, exercise]
     category: health
     prerequisites:

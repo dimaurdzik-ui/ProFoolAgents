@@ -1,6 +1,16 @@
 import { ComposerPrimitive } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
+import {
+  type ClipboardEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 
 import { composerFill, composerFloatingStrip, composerSurfaceGlass } from '@/components/chat/composer-dock'
 import { Button } from '@/components/ui/button'
@@ -22,6 +32,8 @@ import { $threadScrolledUp } from '@/store/thread-scroll'
 import { $autoSpeakReplies } from '@/store/voice-prefs'
 import { useTheme } from '@/themes'
 
+import { AgentCreationDialog } from './agent-creation-dialog'
+import { AgentSelector } from './agent-selector'
 import { AttachmentList } from './attachments'
 import {
   acceptsTriggerCompletion,
@@ -54,6 +66,7 @@ import { useComposerMicroActions } from './hooks/use-micro-actions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useSessionStatusPresence } from './hooks/use-status-presence'
 import { ActionBadges } from './micro-actions'
+import { ModelPill } from './model-pill'
 import { chipTypedPathOnSpace, pathifyRefs } from './path-refs'
 import { QueuePanel } from './queue-panel'
 import {
@@ -338,7 +351,12 @@ export function ChatBar({
 
   // Resting / reconnecting / starting placeholder text, re-rolled only on a real
   // conversation change.
-  const placeholder = useComposerPlaceholder({ disabled, reconnecting, sessionId })
+  const [createAgentDialogOpen, setCreateAgentDialogOpen] = useState(false)
+
+  const restingPlaceholder = useComposerPlaceholder({ disabled, reconnecting, sessionId })
+  let placeholder = restingPlaceholder
+
+  const inputId = useId()
 
   // Trigger / completion engine: @// detection, the adapter-driven item list,
   // popover selection, and chip insertion. The keydown nav block below consumes
@@ -368,7 +386,7 @@ export function ChatBar({
   // editor (O(n)), so running it on every event during a burst — holding a key,
   // or holding Cmd+V into a growing editor — is O(n²) across the burst. The
   // contentEditable DOM is the source of truth (submit + the compositionend /
-  // keydown paths re-read it synchronously), so collapsing the input/paste
+  // keydown paths re-read it synchropixelly), so collapsing the input/paste
   // flushes to one per paint is lossless.
   const flushRafRef = useRef<number | undefined>(undefined)
 
@@ -992,7 +1010,7 @@ export function ChatBar({
         IMPORTANT: don't let it render its default <TextareaAutosize>. That
         component runs `useLayoutEffect(resizeTextarea)` on every value change
         and reads `node.scrollHeight` against a hidden measurement textarea,
-        forcing two synchronous layouts per keystroke for an element the
+        forcing two synchropixel layouts per keystroke for an element the
         user can't see. Profiling 400-char synthetic typing showed >900ms
         cumulative cost in getHeight2/calculateNodeHeight alone (~2.3ms/key)
         on top of the per-keystroke React commit.
@@ -1254,6 +1272,18 @@ export function ChatBar({
                       {controls}
                     </div>
                   </div>
+                  <div className="flex w-full items-center gap-2 border-t border-border/40 pt-1.5 pb-0.5 empty:hidden flex-wrap md:flex-nowrap">
+                    <AgentSelector
+                      disabled={disabled}
+                      onOpenCreateDialog={() => setCreateAgentDialogOpen(true)}
+                      sessionId={statusSessionId}
+                    />
+                    <div className="h-4 w-[1px] shrink-0 bg-border/40" />
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                      <span>Модель:</span>
+                      <ModelPill compact={false} disabled={disabled} model={state.model} />
+                    </div>
+                  </div>
                   <ContribSlot area={COMPOSER_AREAS.bottom} />
                 </div>
               </div>
@@ -1276,6 +1306,11 @@ export function ChatBar({
         onSubmit={submitUrl}
         open={urlOpen}
         value={urlValue}
+      />
+      <AgentCreationDialog
+        onOpenChange={setCreateAgentDialogOpen}
+        open={createAgentDialogOpen}
+        sessionId={statusSessionId}
       />
     </>
   )

@@ -1,1 +1,1 @@
-# Hermes plugins package
+# Pixel Agents plugins package

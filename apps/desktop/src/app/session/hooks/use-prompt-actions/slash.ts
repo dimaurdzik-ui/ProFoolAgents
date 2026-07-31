@@ -1,7 +1,6 @@
-import { skillInvocationText } from '@hermes/shared'
+import { skillInvocationText } from '@pixel-agents/shared'
 import { type MutableRefObject, useCallback, useRef } from 'react'
 
-import { getProfiles } from '@/hermes'
 import type { Translations } from '@/i18n'
 import { type ChatMessage, toChatMessages } from '@/lib/chat-messages'
 import { parseCommandDispatch, parseSlashCommand, sessionTitle } from '@/lib/chat-runtime'
@@ -16,6 +15,7 @@ import {
 } from '@/lib/desktop-slash-commands'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { setSessionYolo } from '@/lib/yolo-session'
+import { getProfiles } from '@/pixel-agents'
 import { openCommandPalettePage } from '@/store/command-palette'
 import { setComposerDraft } from '@/store/composer'
 import { enqueueQueuedPrompt } from '@/store/composer-queue'
@@ -67,7 +67,7 @@ import {
 
 // Manual compression is LLM-bound and routinely outlives the desktop's 30s
 // default WS request timeout on large sessions — give it the TUI client's
-// 120s RPC budget (HERMES_TUI_RPC_TIMEOUT_MS default) instead.
+// 120s RPC budget (PIXEL_AGENTS_TUI_RPC_TIMEOUT_MS default) instead.
 const SESSION_COMPRESS_TIMEOUT_MS = 120_000
 const WAKE_START_TIMEOUT_MS = 180_000
 
@@ -86,7 +86,7 @@ const renderWakeStatus = (status: WakeStatusResponse): string => {
   const lines = [
     'Wake Word Status',
     `State: ${status.listening ? 'LISTENING' : 'OFF'}`,
-    `Phrase: "${status.phrase?.trim() || 'hey hermes'}"`,
+    `Phrase: "${status.phrase?.trim() || 'hey pixel-agents'}"`,
     `Provider: ${status.provider?.trim() || 'unknown'}`,
     `Surface: ${status.owner_surface?.trim() || status.configured_surface?.trim() || 'auto'}`,
     `Input: ${wakeDeviceLabel(status.input_device)}`
@@ -639,7 +639,7 @@ export function useSlashCommand(deps: SlashCommandDeps) {
           }
         },
         // /wake must stay in the gateway process that owns the Desktop wake
-        // lease. Sending it through slash.exec creates a separate HermesCLI in
+        // lease. Sending it through slash.exec creates a separate PixelAgentsCLI in
         // the slash worker, which can claim the machine-wide microphone lock
         // while the Desktop UI still reports the GUI listener as off.
         wake: async ctx => {

@@ -1,4 +1,4 @@
-import type { StarmapNode } from '@/types/hermes'
+import type { StarmapNode } from '@/types/pixel-agents'
 
 import type { GraphParams, Rgb, RingParams, Shape } from './types'
 

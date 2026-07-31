@@ -62,7 +62,7 @@ describe('subagent store', () => {
         subagent_id: 'a1',
         task_index: 0,
         tool_name: 'search_files',
-        tool_preview: 'pattern=hermes'
+        tool_preview: 'pattern=pixel-agents'
       },
       false,
       'subagent.tool'
@@ -91,6 +91,26 @@ describe('subagent store', () => {
     expect(item?.stream.find(e => e.kind === 'tool')?.text).toContain('Search Files')
     expect(item?.stream.find(e => e.kind === 'thinking')?.text).toBe('plan the search order')
     expect(item?.stream.find(e => e.kind === 'summary')?.text).toBe('search complete')
+  })
+
+  it('keeps a delegated professional and their work contract across progress events', () => {
+    upsertSubagent('s1', {
+      acceptance_criteria: ['cite sources', 'compare three competitors'],
+      deliverable: 'A concise competitor analysis',
+      goal: 'Research the market',
+      status: 'running',
+      subagent_id: 'research-1',
+      task_index: 0,
+      worker_id: 'research-business-analyst',
+      worker_name: 'Research & Business Analyst'
+    })
+    upsertSubagent('s1', { status: 'running', subagent_id: 'research-1', task_index: 0, tool_name: 'web_search' })
+
+    const item = listFor('s1')[0]
+    expect(item?.workerId).toBe('research-business-analyst')
+    expect(item?.workerName).toBe('Research & Business Analyst')
+    expect(item?.deliverable).toBe('A concise competitor analysis')
+    expect(item?.acceptanceCriteria).toEqual(['cite sources', 'compare three competitors'])
   })
 
   it('prunes delegate fallback rows once native events arrive', () => {

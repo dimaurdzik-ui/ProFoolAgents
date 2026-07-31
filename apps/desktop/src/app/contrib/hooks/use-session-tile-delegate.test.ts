@@ -1,19 +1,19 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type * as HermesModule from '@/hermes'
+import type * as PixelAgentsModule from '@/pixel-agents'
 import { setSessions } from '@/store/session'
 import { sessionTileDelegate } from '@/store/session-states'
-import type { SessionInfo } from '@/types/hermes'
+import type { SessionInfo } from '@/types/pixel-agents'
 
 import { useSessionTileDelegate } from './use-session-tile-delegate'
 
-vi.mock('@/hermes', async importActual => ({
-  ...(await importActual<typeof HermesModule>()),
+vi.mock('@/pixel-agents', async importActual => ({
+  ...(await importActual<typeof PixelAgentsModule>()),
   getSessionMessages: vi.fn(async () => ({ messages: [], session_id: '' }))
 }))
 
-const { getSessionMessages } = await import('@/hermes')
+const { getSessionMessages } = await import('@/pixel-agents')
 
 const row = (over: Partial<SessionInfo>): SessionInfo =>
   ({

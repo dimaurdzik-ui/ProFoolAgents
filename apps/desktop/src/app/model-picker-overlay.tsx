@@ -2,8 +2,8 @@ import { useStore } from '@nanostores/react'
 
 import type { ModelSelection } from '@/app/shell/model-menu-panel'
 import { ModelPickerDialog } from '@/components/model-picker'
-import type { HermesGateway } from '@/hermes'
 import { useStoreSelector } from '@/lib/use-session-slice'
+import type { PixelAgentsGateway } from '@/pixel-agents'
 import {
   $activeSessionId,
   $currentModel,
@@ -15,7 +15,7 @@ import {
 import { $focusedRuntimeId, $focusedSessionState } from '@/store/session-states'
 
 interface ModelPickerOverlayProps {
-  gateway?: HermesGateway
+  gateway?: PixelAgentsGateway
   onSelect: (selection: ModelSelection) => void
   profile: string
 }

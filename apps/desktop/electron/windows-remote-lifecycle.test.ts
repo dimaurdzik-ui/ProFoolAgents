@@ -39,8 +39,8 @@ test('platform detection preserves POSIX and falls back to Windows PowerShell', 
       return JSON.stringify({
         os: 'Windows',
         arch: 'ARM64',
-        hermesHome: 'C:\\h',
-        hermesPath: 'C:\\h\\hermes.exe',
+        pixelAgentsHome: 'C:\\h',
+        pixelAgentsPath: 'C:\\h\\pixel-agents.exe',
         python: 'C:\\h\\python.exe'
       })
     })
@@ -72,23 +72,23 @@ test('platform detection surfaces transport failures as themselves, not unsuppor
           throw new Error('not recognized')
         }
 
-        throw new Error('Hermes is not installed on the remote Windows host.')
+        throw new Error('Pixel Agents is not installed on the remote Windows host.')
       })
     ),
-    (err: any) => err.kind === 'unsupported-platform' && /Hermes is not installed/.test(err.message)
+    (err: any) => err.kind === 'unsupported-platform' && /Pixel Agents is not installed/.test(err.message)
   )
 })
 
 test('helper command uses the fixed remote Python entry point and quotes path data', () => {
-  const command = helperCommand({ python: "C:\\Program Files\\Hermes's\\python.exe" }, 'inspect', [
-    'C:\\x y\\hermes.exe'
+  const command = helperCommand({ python: "C:\\Program Files\\Pixel Agents's\\python.exe" }, 'inspect', [
+    'C:\\x y\\pixel-agents.exe'
   ])
 
   const encoded = command.split(' ').pop()!
   const script = Buffer.from(encoded, 'base64').toString('utf16le')
-  assert.match(script, /-m' 'hermes_cli\.windows_ssh_runtime' 'inspect'/)
-  assert.match(script, /Hermes''s/)
-  assert.match(script, /C:\\x y\\hermes\.exe/)
+  assert.match(script, /-m' 'pixel_cli\.windows_ssh_runtime' 'inspect'/)
+  assert.match(script, /Pixel Agents''s/)
+  assert.match(script, /C:\\x y\\pixel-agents\.exe/)
 })
 
 test('Windows lock validation is scoped and exact', () => {
@@ -101,8 +101,8 @@ test('Windows lock validation is scoped and exact', () => {
     creationTimeNs: '1784219690452757504',
     port: 1234,
     tokenFingerprint: 'a'.repeat(32),
-    hermesPath: 'C:\\h\\hermes.exe',
-    hermesHome: 'C:\\h'
+    pixelAgentsPath: 'C:\\h\\pixel-agents.exe',
+    pixelAgentsHome: 'C:\\h'
   }
 
   assert.equal(validLock(lock, ownershipId), true)

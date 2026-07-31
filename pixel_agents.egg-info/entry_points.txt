@@ -1,0 +1,4 @@
+[console_scripts]
+pixel-agents = pixel_cli.main:main
+pixel-agents-acp = acp_adapter.entry:main
+pixel-agents-core = run_agent:main

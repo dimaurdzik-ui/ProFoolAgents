@@ -115,7 +115,7 @@ export interface Translations {
       loadingSettings: string
       loadingSessions: string
       startingDesktopConnection: string
-      startingHermesDesktop: string
+      startingPixelAgentsDesktop: string
     }
     errors: {
       backgroundExited: string
@@ -167,7 +167,7 @@ export interface Translations {
     backendOutOfDateTitle: string
     backendOutOfDateMessage: string
     installMethodUnsupportedTitle: string
-    updateHermes: string
+    updatePixelAgents: string
     updateReadyTitle: string
     updateReadyMessage: (count: number) => string
     seeWhatsNew: string
@@ -223,7 +223,7 @@ export interface Translations {
   }
 
   billingBlock: {
-    titleNous: string
+    titlePixel: string
     titleProvider: (provider: string) => string
     fallbackMessage: string
     openBilling: string
@@ -602,9 +602,9 @@ export interface Translations {
       sshPortDesc: string
       sshKeyTitle: string
       sshKeyDesc: string
-      sshHermesPathTitle: string
-      sshHermesPathDesc: string
-      sshHermesPathPlaceholder: string
+      sshPixelAgentsPathTitle: string
+      sshPixelAgentsPathDesc: string
+      sshPixelAgentsPathPlaceholder: string
       sshTestConnection: string
       sshConnect: string
       sshButtonsHint: string
@@ -792,13 +792,13 @@ export interface Translations {
       activeBackend: string
       activeBackendHint: string
       useBackend: string
-      nousIncluded: string
-      nousAuthNeededTitle: string
-      nousAuthNeededMessage: (provider: string) => string
-      nousAuthSignIn: string
-      nousAuthDoneTitle: string
-      nousAuthDoneMessage: string
-      nousAuthFailed: string
+      pixelIncluded: string
+      pixelAuthNeededTitle: string
+      pixelAuthNeededMessage: (provider: string) => string
+      pixelAuthSignIn: string
+      pixelAuthDoneTitle: string
+      pixelAuthDoneMessage: string
+      pixelAuthFailed: string
       noApiKeyRequired: string
       postSetupHint: (step: string) => string
       postSetupInstalledHint: string
@@ -979,6 +979,8 @@ export interface Translations {
     failed: string
     done: string
     streaming: string
+    deliverable: string
+    acceptanceCriteria: string
     files: string
     moreFiles: (count: number) => string
     delegation: (index: number) => string
@@ -1094,10 +1096,10 @@ export interface Translations {
     noSessions: string
     gatewayRunning: string
     gatewayStopped: string
-    hermesActiveSessions: (version: string, count: number) => string
+    pixelAgentsActiveSessions: (version: string, count: number) => string
     restartGateway: string
     gatewayRestartFailed: string
-    updateHermes: string
+    updatePixelAgents: string
     actionRunning: string
     actionDone: string
     actionFailed: string

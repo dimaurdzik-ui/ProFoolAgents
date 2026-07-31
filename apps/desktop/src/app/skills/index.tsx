@@ -10,6 +10,13 @@ import { PageLoader } from '@/components/page-loader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CountSkeleton } from '@/components/ui/skeleton'
+import { useI18n } from '@/i18n'
+import { isDesktopToolsetVisible } from '@/lib/desktop-toolsets'
+import { compactNumber } from '@/lib/format'
+import { queryClient, writeCache } from '@/lib/query-client'
+import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
+import { normalize } from '@/lib/text'
+import { useStoreSelector } from '@/lib/use-session-slice'
 import {
   editLearningNode,
   getLearningNode,
@@ -18,18 +25,11 @@ import {
   getUsageAnalytics,
   setSkillEnabled,
   setToolsetEnabled
-} from '@/hermes'
-import { useI18n } from '@/i18n'
-import { isDesktopToolsetVisible } from '@/lib/desktop-toolsets'
-import { compactNumber } from '@/lib/format'
-import { queryClient, writeCache } from '@/lib/query-client'
-import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
-import { normalize } from '@/lib/text'
-import { useStoreSelector } from '@/lib/use-session-slice'
+} from '@/pixel-agents'
 import { $gateway } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
-import type { SkillInfo, ToolsetInfo } from '@/types/hermes'
+import type { SkillInfo, ToolsetInfo } from '@/types/pixel-agents'
 
 import { useOnProfileSwitch } from '../hooks/use-on-profile-switch'
 import { useRefreshHotkey } from '../hooks/use-refresh-hotkey'
@@ -459,7 +459,7 @@ export function SkillsView({ setStatusbarItemGroup: _setStatusbarItemGroup, ...p
 
   // Learned/local skills are editable + archivable, mirroring the memory
   // graph (same /api/learning/node endpoints — delete archives, restorable
-  // via `hermes curator restore`).
+  // via `pixel-agents curator restore`).
   const [skillEditor, setSkillEditor] = useState<null | { content: string; name: string }>(null)
   const [skillDraft, setSkillDraft] = useState('')
   const [skillSaving, setSkillSaving] = useState(false)

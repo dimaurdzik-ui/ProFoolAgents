@@ -36,7 +36,7 @@ from toolsets import TOOLSETS
 
 # Sentinel value used by the runtime provider system for providers that are
 # not natively known (named custom providers, third-party aggregators, etc.).
-# Must match hermes_cli.runtime_provider.RUNTIME_PROVIDER_TYPE_CUSTOM.
+# Must match pixel_cli.runtime_provider.RUNTIME_PROVIDER_TYPE_CUSTOM.
 _RUNTIME_PROVIDER_CUSTOM = "custom"
 from tools import file_state
 from tools.terminal_tool import set_approval_callback as _set_subagent_approval_cb
@@ -526,10 +526,10 @@ def _get_max_async_children() -> int:
 
     DEPRECATED KNOB: ``delegation.max_async_children`` has been unified into
     ``delegation.max_concurrent_children`` — one cap governs both a single
-    synchronous batch's parallelism and how many background delegation units
+    synchropixel batch's parallelism and how many background delegation units
     may run at once. When at capacity, a new async dispatch is REJECTED (not
     queued) so a runaway model can't pile up unbounded background work; the
-    caller falls back to running the work synchronously.
+    caller falls back to running the work synchropixelly.
 
     A leftover ``max_async_children`` in config.yaml is ignored (the config
     migration removes it, folding a raised value into
@@ -670,10 +670,10 @@ def _is_mcp_toolset_name(name: str) -> bool:
 def _expand_parent_toolsets(parent_toolsets: set) -> set:
     """Expand composite toolsets so individual toolset names are recognized.
 
-    When a parent uses a composite toolset like ``hermes-cli`` (which bundles
+    When a parent uses a composite toolset like ``pixel-agents-cli`` (which bundles
     all core tools), the child may request individual toolsets such as ``web``
     or ``terminal``.  A simple name-based intersection would reject them
-    because ``"web" != "hermes-cli"``.
+    because ``"web" != "pixel-agents-cli"``.
 
     This helper collects the tool names from each parent toolset, then adds
     the names of any individual toolsets whose tools are a *subset* of the
@@ -914,7 +914,7 @@ def _blocked_toolsets_for_role(role: str) -> List[str]:
     """Return one-tool deny toolsets for a delegated child role.
 
     ``_strip_blocked_tools`` can remove fully blocked toolsets, but it must keep
-    mixed platform bundles such as ``hermes-cli`` because those also contain
+    mixed platform bundles such as ``pixel-agents-cli`` because those also contain
     useful tools. Passing these exact deny toolsets to AIAgent lets
     ``model_tools`` subtract blocked names *after* composite expansion, and the
     restriction survives later registry/MCP refreshes through the agent's
@@ -961,6 +961,10 @@ def _build_child_progress_callback(
     model: Optional[str] = None,
     toolsets: Optional[List[str]] = None,
     session_ref: Optional[Dict[str, Any]] = None,
+    worker_id: Optional[str] = None,
+    worker_name: Optional[str] = None,
+    deliverable: Optional[str] = None,
+    acceptance_criteria: Optional[List[str]] = None,
 ) -> Optional[callable]:
     """Build a callback that relays child agent tool calls to the parent display.
 
@@ -1008,6 +1012,14 @@ def _build_child_progress_callback(
             kw["model"] = model
         if toolsets is not None:
             kw["toolsets"] = list(toolsets)
+        if worker_id:
+            kw["worker_id"] = worker_id
+        if worker_name:
+            kw["worker_name"] = worker_name
+        if deliverable:
+            kw["deliverable"] = deliverable
+        if acceptance_criteria:
+            kw["acceptance_criteria"] = list(acceptance_criteria)
         # The child's own session id — filled into the shared ref once the
         # child agent exists (the callback is built first), so every relayed
         # event lets UIs open/inspect the subagent's session directly.
@@ -1212,6 +1224,10 @@ def _build_child_agent(
     # 'leaf' (default) cannot; 'orchestrator' retains the delegation
     # toolset subject to depth/kill-switch bounds applied below.
     role: str = "leaf",
+    # Optional professional template selected by the parent orchestrator.
+    worker_id: Optional[str] = None,
+    deliverable: Optional[str] = None,
+    acceptance_criteria: Optional[List[str]] = None,
 ):
     """
     Build a child AIAgent on the main thread (thread-safe construction).
@@ -1220,7 +1236,7 @@ def _build_child_agent(
     When override_* params are set (from delegation config), the child uses
     those credentials instead of inheriting from the parent.  This enables
     routing subagents to a different provider:model pair (e.g. cheap/fast
-    model on OpenRouter while the parent runs on Nous Portal).
+    model on OpenRouter while the parent runs on Pixel Portal).
     """
     from run_agent import AIAgent
     import uuid as _uuid
@@ -1268,7 +1284,7 @@ def _build_child_agent(
 
     if toolsets:
         # Intersect with parent — subagent must not gain tools the parent lacks.
-        # Expand composite toolsets (e.g. hermes-cli) so that individual
+        # Expand composite toolsets (e.g. pixel-agents-cli) so that individual
         # toolset names (e.g. web, terminal) are recognised during intersection.
         expanded_parent = _expand_parent_toolsets(parent_toolsets)
         child_toolsets = [t for t in toolsets if t in expanded_parent]
@@ -1284,8 +1300,8 @@ def _build_child_agent(
     else:
         child_toolsets = _strip_blocked_tools(DEFAULT_TOOLSETS)
 
-    # Blocked tools also live inside mixed platform bundles (hermes-cli,
-    # hermes-telegram, etc.) that _strip_blocked_tools must keep because they
+    # Blocked tools also live inside mixed platform bundles (pixel-agents-cli,
+    # pixel-agents-telegram, etc.) that _strip_blocked_tools must keep because they
     # carry useful tools too. Pass exact one-tool deny toolsets through to the
     # child so model_tools subtracts the blocked names AFTER composite
     # expansion, and the restriction survives later registry/MCP refreshes.
@@ -1313,6 +1329,14 @@ def _build_child_agent(
     if effective_role == "orchestrator" and "delegation" not in child_toolsets:
         child_toolsets.append("delegation")
 
+    worker_template = None
+    if worker_id:
+        from agent.agent_registry import TEAM_AGENT_ID, get_agent_template
+
+        worker_template = get_agent_template(worker_id)
+        if worker_template is None or worker_template.id == TEAM_AGENT_ID:
+            raise ValueError(f"Unknown professional worker: {worker_id}")
+
     workspace_hint = _resolve_workspace_hint(parent_agent)
     child_prompt = _build_child_system_prompt(
         goal,
@@ -1322,7 +1346,23 @@ def _build_child_agent(
         max_spawn_depth=max_spawn,
         child_depth=child_depth,
     )
-    # Extract parent's API key so subagents inherit auth (e.g. Nous Portal).
+    if worker_template is not None:
+        from agent.agent_registry import build_team_directory
+
+        contract_lines = []
+        if deliverable:
+            contract_lines.append(f"EXPECTED DELIVERABLE: {deliverable}")
+        if acceptance_criteria:
+            contract_lines.append(
+                "ACCEPTANCE CRITERIA:\n" + "\n".join(f"- {item}" for item in acceptance_criteria)
+            )
+        child_prompt = (
+            f"{child_prompt}\n\n[ASSIGNED PROFESSIONAL WORKER: {worker_template.name}]\n"
+            f"{worker_template.system_prompt}"
+            f"{build_team_directory(worker_template.id)}"
+            + ("\n\n[WORK CONTRACT]\n" + "\n".join(contract_lines) if contract_lines else "")
+        )
+    # Extract parent's API key so subagents inherit auth (e.g. Pixel Portal).
     parent_api_key = getattr(parent_agent, "api_key", None)
     if (not parent_api_key) and hasattr(parent_agent, "_client_kwargs"):
         parent_api_key = parent_agent._client_kwargs.get("api_key")
@@ -1345,6 +1385,10 @@ def _build_child_agent(
         model=effective_model_for_cb,
         toolsets=child_toolsets,
         session_ref=child_session_ref,
+        worker_id=worker_template.id if worker_template is not None else None,
+        worker_name=worker_template.name if worker_template is not None else None,
+        deliverable=deliverable,
+        acceptance_criteria=acceptance_criteria,
     )
 
     # Each subagent gets its own iteration budget capped at max_iterations
@@ -1378,19 +1422,19 @@ def _build_child_agent(
     # Inheriting the parent's mode causes 404 errors when the child routes to the
     # wrong endpoint.  Derive the mode from the target provider when it differs.
     #
-    # Nous Portal is dual-wire within a single provider: anthropic/* → Messages,
+    # Pixel Portal is dual-wire within a single provider: anthropic/* → Messages,
     # everything else → chat_completions. Same-provider inheritance would pin a
-    # child Hermes/Qwen subagent onto the parent's Claude Messages wire (or the
-    # reverse). agent_init honors an explicit api_mode above its nous branch, so
+    # child Pixel Agents/Qwen subagent onto the parent's Claude Messages wire (or the
+    # reverse). agent_init honors an explicit api_mode above its pixel branch, so
     # re-derive here before construction.
     _parent_provider = getattr(parent_agent, "provider", None) or ""
     _effective_provider_norm = (effective_provider or "").strip().lower()
     if override_api_mode is not None:
         effective_api_mode = override_api_mode
-    elif _effective_provider_norm in {"nous", "nous-portal", "nousresearch"}:
-        from hermes_cli.providers import nous_api_mode
+    elif _effective_provider_norm in {"pixel", "pixel-portal", "pixelagents"}:
+        from pixel_cli.providers import pixel_api_mode
 
-        effective_api_mode = nous_api_mode(effective_model)
+        effective_api_mode = pixel_api_mode(effective_model)
     elif effective_provider != _parent_provider:
         effective_api_mode = None  # force re-derivation from provider's defaults
     else:
@@ -1441,7 +1485,7 @@ def _build_child_agent(
         # instead of disabling thinking for children.
         delegation_effort = delegation_cfg.get("reasoning_effort")
         if delegation_effort or delegation_effort is False:
-            from hermes_constants import parse_reasoning_effort
+            from pixel_constants import parse_reasoning_effort
 
             parsed = parse_reasoning_effort(delegation_effort)
             if parsed is not None:
@@ -1516,6 +1560,15 @@ def _build_child_agent(
             fallback_model=parent_fallback,
             enabled_toolsets=child_toolsets,
             disabled_toolsets=child_disabled_toolsets,
+            allowed_tools=(
+                [
+                    tool_name
+                    for tool_name in parent_agent.valid_tool_names
+                    if tool_name in worker_template.allowed_tools
+                ]
+                if worker_template is not None and getattr(parent_agent, "valid_tool_names", None) is not None
+                else (list(parent_agent.valid_tool_names) if getattr(parent_agent, "valid_tool_names", None) is not None else None)
+            ),
             quiet_mode=True,
             ephemeral_system_prompt=child_prompt,
             log_prefix=f"[subagent-{task_index}]",
@@ -1556,6 +1609,10 @@ def _build_child_agent(
     child._subagent_id = subagent_id
     child._parent_subagent_id = parent_subagent_id
     child._subagent_goal = goal
+    child._worker_id = worker_template.id if worker_template is not None else None
+    child._worker_name = worker_template.name if worker_template is not None else None
+    child._task_deliverable = deliverable
+    child._task_acceptance_criteria = list(acceptance_criteria or [])
     child._parent_turn_id = getattr(parent_agent, "_current_turn_id", "") or ""
     # Stable sidebar marker: delegate subagent sessions must stay out of
     # session pickers even when a parent delete orphans them (parent_session_id
@@ -1592,7 +1649,7 @@ def _build_child_agent(
             logger.debug("spawn_requested relay failed: %s", exc)
 
     try:
-        from hermes_cli.lifecycle import invoke_hook as _invoke_hook
+        from pixel_cli.lifecycle import invoke_hook as _invoke_hook
         _invoke_hook(
             "subagent_start",
             parent_session_id=getattr(parent_agent, "session_id", None),
@@ -1623,21 +1680,21 @@ def _dump_subagent_timeout_diagnostic(
 
     See issue #14726: users hit "subagent timed out after 300s with no response"
     with zero API calls and no way to inspect what happened. This helper
-    writes a dedicated log under ``~/.hermes/logs/subagent-<sid>-<ts>.log``
+    writes a dedicated log under ``~/.pixel-agents/logs/subagent-<sid>-<ts>.log``
     capturing the child's config, system-prompt / tool-schema sizes, activity
     tracker snapshot, and the worker thread's Python stack at timeout.
 
     Returns the absolute path to the diagnostic file, or None on failure.
     """
     try:
-        from hermes_constants import get_hermes_home
+        from pixel_constants import get_pixel_agents_home
         import datetime as _dt
         import sys as _sys
         import traceback as _traceback
         import threading as _threading
 
-        hermes_home = get_hermes_home()
-        logs_dir = hermes_home / "logs"
+        pixel_home = get_pixel_agents_home()
+        logs_dir = pixel_home / "logs"
         try:
             logs_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
@@ -1796,10 +1853,10 @@ def _spill_summary_to_file(task_index: int, summary: str) -> Optional[str]:
     the trimmed head+tail is still returned to the parent regardless).
     """
     try:
-        from hermes_constants import get_hermes_dir
+        from pixel_constants import get_pixel_agents_dir
         import datetime as _dt
 
-        cache_dir = get_hermes_dir("cache/delegation", "delegation_cache")
+        cache_dir = get_pixel_agents_dir("cache/delegation", "delegation_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
         ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         path = cache_dir / f"subagent-summary-{task_index}-{ts}.txt"
@@ -2095,6 +2152,12 @@ def _run_single_child(
                 "parent_id": _parent_sid if isinstance(_parent_sid, str) else None,
                 "depth": _tui_depth,
                 "goal": goal,
+                "worker_id": getattr(child, "_worker_id", None),
+                "worker_name": getattr(child, "_worker_name", None),
+                "deliverable": getattr(child, "_task_deliverable", None),
+                "acceptance_criteria": list(
+                    getattr(child, "_task_acceptance_criteria", []) or []
+                ),
                 "model": (
                     getattr(child, "model", None)
                     if isinstance(getattr(child, "model", None), str)
@@ -2677,7 +2740,7 @@ def _finalize_child_results(
 
         parent_session_id = getattr(parent_agent, "session_id", None)
         try:
-            from hermes_cli.plugins import invoke_hook as invoke_hook
+            from pixel_cli.plugins import invoke_hook as invoke_hook
         except Exception:
             invoke_hook = None
 
@@ -2887,6 +2950,17 @@ def delegate_task(
     if not task_list:
         return tool_error("No tasks provided.")
 
+    # The team orchestrator is only useful if its work is performed by the
+    # actual professional templates. Enforce the contract here rather than
+    # trusting prompt wording, while leaving the generic delegate_task API
+    # backward compatible for CLI, plugins, and user-defined orchestrators.
+    is_pixel_team = getattr(parent_agent, "agent_id", None) == "pixel-team"
+    if is_pixel_team and not isinstance(tasks, list):
+        return tool_error(
+            "Команда Pixel Agents делегує складну роботу тільки через tasks "
+            "у batch-форматі, де для кожної задачі вказано спеціаліста."
+        )
+
     # Validate each task has a goal
     for i, task in enumerate(task_list):
         if not isinstance(task, dict):
@@ -2895,6 +2969,30 @@ def delegate_task(
             )
         if not task.get("goal", "").strip():
             return tool_error(f"Task {i} is missing a 'goal'.")
+        worker_id = task.get("worker_id")
+        if is_pixel_team and not isinstance(worker_id, str):
+            return tool_error(
+                f"Task {i} from Команда Pixel Agents must name a professional worker_id."
+            )
+        if worker_id:
+            from agent.agent_registry import TEAM_AGENT_ID, get_agent_template
+
+            template = get_agent_template(str(worker_id))
+            if template is None or template.id == TEAM_AGENT_ID:
+                return tool_error(f"Task {i} names an unknown professional worker: {worker_id}.")
+        criteria = task.get("acceptance_criteria")
+        if is_pixel_team and not isinstance(task.get("deliverable"), str):
+            return tool_error(
+                f"Task {i} from Команда Pixel Agents must state a concrete deliverable."
+            )
+        if is_pixel_team and not criteria:
+            return tool_error(
+                f"Task {i} from Команда Pixel Agents must include acceptance_criteria."
+            )
+        if criteria is not None and (
+            not isinstance(criteria, list) or not all(isinstance(item, str) and item.strip() for item in criteria)
+        ):
+            return tool_error(f"Task {i} has invalid acceptance_criteria; expected an array of non-empty strings.")
 
     overall_start = time.monotonic()
     results = []
@@ -2921,9 +3019,9 @@ def delegate_task(
     # Capture the ORIGINATING session's wake target BEFORE any child agent is
     # constructed: _build_child_agent() -> AIAgent() -> agent_init calls
     # set_current_session_id(child.session_id), which clobbers the
-    # HERMES_SESSION_ID ContextVar and os.environ with the subagent's internal
+    # PIXEL_AGENTS_SESSION_ID ContextVar and os.environ with the subagent's internal
     # id before the background-dispatch code below would read it. The
-    # request-scoped chat_id binding (the raw X-Hermes-Session-Id on
+    # request-scoped chat_id binding (the raw X-Pixel-Agents-Session-Id on
     # api_server) is untouched by child construction, so read it here and
     # thread it through the dispatch.
     from tools.async_delegation import _current_origin_session_id
@@ -2960,6 +3058,9 @@ def delegate_task(
             override_acp_command=creds.get("command"),
             override_acp_args=creds.get("args"),
             role=effective_role,
+            worker_id=t.get("worker_id"),
+            deliverable=t.get("deliverable"),
+            acceptance_criteria=t.get("acceptance_criteria"),
         )
         # Tee the child's progress events into its live transcript log.
         # wrap_progress_callback preserves the inner callback contract
@@ -2977,7 +3078,7 @@ def delegate_task(
     def _execute_and_aggregate(*, honor_parent_interrupt: bool = True) -> dict:
         """Run all built children (1 or N), join on them, aggregate results,
         fire subagent_stop hooks + cost rollup, and return the combined result
-        dict. Used by BOTH the synchronous path and the background runner. In
+        dict. Used by BOTH the synchropixel path and the background runner. In
         the background case this whole function runs on the daemon executor, so
         the parent turn isn't blocked — but the batch still JOINS on itself
         here (all children must finish) before producing ONE consolidated
@@ -3167,7 +3268,7 @@ def delegate_task(
         # Finite sessions cannot route a detached subagent result back to the
         # agent after their turn/process ends. This includes stateless HTTP
         # requests (#10760) and one-shot Kanban workers (#63169). Fall back to
-        # SYNCHRONOUS execution so the result returns in this same turn instead
+        # SYNCHROPIXEL execution so the result returns in this same turn instead
         # of handing out a handle with no durable consumer. Mirrors the
         # pool-at-capacity inline fallback below.
         try:
@@ -3182,18 +3283,18 @@ def delegate_task(
             # bound (the API server always binds one — see
             # ApiServerAdapter._bind_api_server_session), gateway.wake can
             # still reach the session by self-POSTing /v1/chat/completions
-            # with that id in X-Hermes-Session-Id once the batch completes.
+            # with that id in X-Pixel-Agents-Session-Id once the batch completes.
             # Only fall back to forced-sync execution when there is truly no
             # session id to wake. Uses the origin captured before child
             # construction (see _origin_wake_sid above) — reading
-            # HERMES_SESSION_ID here would return the subagent's internal id.
+            # PIXEL_AGENTS_SESSION_ID here would return the subagent's internal id.
             _wake_sid = _origin_wake_sid
             if _wake_sid:
                 logger.info(
                     "delegate_task: async delivery unsupported on this "
                     "session, but a session id is bound (%s) — dispatching "
                     "in the background and waking the session via self-post "
-                    "when it completes instead of forcing synchronous "
+                    "when it completes instead of forcing synchropixel "
                     "execution.",
                     _wake_sid,
                 )
@@ -3202,16 +3303,16 @@ def delegate_task(
         if not _async_ok:
             logger.info(
                 "delegate_task: async delivery unsupported on this session "
-                "runtime; running the batch synchronously instead."
+                "runtime; running the batch synchropixelly instead."
             )
             _sync_result = _execute_and_aggregate()
             if isinstance(_sync_result, dict):
                 _sync_result["note"] = (
                     "background=true is not available in this session — it cannot "
                     "receive a detached subagent result after the turn ends (a "
-                    "one-shot runner such as `hermes -z`, a cron job, a Kanban "
+                    "one-shot runner such as `pixel-agents -z`, a cron job, a Kanban "
                     "worker, or a stateless HTTP endpoint). The subagent(s) ran "
-                    "SYNCHRONOUSLY and the result is included above."
+                    "SYNCHROPIXELLY and the result is included above."
                 )
             return json.dumps(_sync_result, ensure_ascii=False)
 
@@ -3220,8 +3321,8 @@ def delegate_task(
         try:
             from gateway.session_context import get_session_env
 
-            _source = get_session_env("HERMES_SESSION_SOURCE", "")
-            _origin_ui_session_id = get_session_env("HERMES_UI_SESSION_ID", "")
+            _source = get_session_env("PIXEL_AGENTS_SESSION_SOURCE", "")
+            _origin_ui_session_id = get_session_env("PIXEL_AGENTS_UI_SESSION_ID", "")
             # In desktop/TUI, the routable session key is the durable
             # AIAgent.session_id. Context compression can rotate that id during
             # the same turn before the TUI-side session dict is re-anchored;
@@ -3237,7 +3338,7 @@ def delegate_task(
             _origin_ui_session_id = ""
         if not _session_key:
             # CLI (single-process) path: the approval contextvar is only bound
-            # during gateway/TUI turns and HERMES_SESSION_KEY is not in the CLI
+            # during gateway/TUI turns and PIXEL_AGENTS_SESSION_KEY is not in the CLI
             # environment, so the key resolves empty here. Since #64240 the CLI
             # drains completions through a positive-ownership filter keyed on
             # the durable AIAgent.session_id — an empty session_key would fail
@@ -3373,7 +3474,7 @@ def delegate_task(
         # never accepted, so re-attaching isn't needed: we just run inline).
         logger.info(
             "delegate_task: async pool at capacity (%s); running the whole "
-            "batch synchronously instead.",
+            "batch synchropixelly instead.",
             dispatch.get("error", "rejected"),
         )
         _cap_result = _execute_and_aggregate()
@@ -3381,13 +3482,13 @@ def delegate_task(
             _cap_result["note"] = (
                 "The background delegation pool was at capacity "
                 "(delegation.max_concurrent_children), so the subagent(s) ran "
-                "SYNCHRONOUSLY and the result is included above. Raise "
+                "SYNCHROPIXELLY and the result is included above. Raise "
                 "delegation.max_concurrent_children in config.yaml to allow "
                 "more concurrent background delegations."
             )
         return json.dumps(_cap_result, ensure_ascii=False)
 
-    # ----- Synchronous path -----
+    # ----- Synchropixel path -----
     return json.dumps(_execute_and_aggregate(), ensure_ascii=False)
 
 
@@ -3528,7 +3629,7 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
         # proxies — pick the right transport automatically. Without this,
         # subagents would default to chat_completions and hit 404s on endpoints
         # that only speak the Anthropic Messages protocol. Fixes #10213.
-        from hermes_cli.runtime_provider import _detect_api_mode_for_url
+        from pixel_cli.runtime_provider import _detect_api_mode_for_url
 
         base_lower = configured_base_url.lower()
         provider = "custom"
@@ -3573,7 +3674,7 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
 
     # Provider is configured — resolve full credentials
     try:
-        from hermes_cli.runtime_provider import resolve_runtime_provider
+        from pixel_cli.runtime_provider import resolve_runtime_provider
 
         runtime = resolve_runtime_provider(requested=configured_provider, target_model=configured_model)
     except Exception as exc:
@@ -3581,14 +3682,14 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
             f"Cannot resolve delegation provider '{configured_provider}': {exc}. "
             f"Check that the provider is configured (API key set, valid provider name), "
             f"or set delegation.base_url/delegation.api_key for a direct endpoint. "
-            f"Available providers: openrouter, nous, zai, kimi-coding, minimax."
+            f"Available providers: openrouter, pixel, zai, kimi-coding, minimax."
         ) from exc
 
     api_key = runtime.get("api_key", "")
     if not api_key:
         raise ValueError(
             f"Delegation provider '{configured_provider}' resolved but has no API key. "
-            f"Set the appropriate environment variable or run 'hermes auth'."
+            f"Set the appropriate environment variable or run 'pixel-agents auth'."
         )
 
     return {
@@ -3605,10 +3706,10 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
 
 
 def _load_config() -> dict:
-    """Load delegation config from the active Hermes config.
+    """Load delegation config from the active Pixel Agents config.
 
     Prefer the shared persistent loader because it follows the active
-    HERMES_HOME/profile. ``cli.CLI_CONFIG`` is a legacy fallback for entry
+    PIXEL_AGENTS_HOME/profile. ``cli.CLI_CONFIG`` is a legacy fallback for entry
     points that cannot import the shared loader; importing it first can return
     an old default ``delegation`` block and hide user-set keys such as
     ``max_concurrent_children``.
@@ -3618,15 +3719,15 @@ def _load_config() -> dict:
     rebuild via ``_get_max_concurrent_children``, so skipping the defensive
     deepcopy matters. Do NOT mutate the returned dict.
 
-    ``HERMES_IGNORE_USER_CONFIG=1`` (``hermes chat --ignore-user-config``) is
+    ``PIXEL_AGENTS_IGNORE_USER_CONFIG=1`` (``pixel-agents chat --ignore-user-config``) is
     only honored by the legacy ``cli`` loader, not the shared one, so when the
     flag is set we keep ``cli.CLI_CONFIG`` authoritative to preserve the
     flag's contract of suppressing user config.yaml settings.
     """
-    prefer_legacy = os.environ.get("HERMES_IGNORE_USER_CONFIG") == "1"
+    prefer_legacy = os.environ.get("PIXEL_AGENTS_IGNORE_USER_CONFIG") == "1"
     if not prefer_legacy:
         try:
-            from hermes_cli.config import load_config_readonly
+            from pixel_cli.config import load_config_readonly
 
             full = load_config_readonly()
             cfg = full.get("delegation") or {}
@@ -3841,7 +3942,7 @@ DELEGATE_TASK_SCHEMA = {
     # delegation.max_concurrent_children / max_spawn_depth, not the framework
     # defaults. Building these lazily (instead of at module import) also
     # avoids forcing cli.CLI_CONFIG to load before the test conftest can
-    # redirect HERMES_HOME.
+    # redirect PIXEL_AGENTS_HOME.
     "description": (
         "Spawn one or more subagents in isolated contexts. "
         "Description is rebuilt at every get_definitions() call to reflect "
@@ -3880,6 +3981,19 @@ DELEGATE_TASK_SCHEMA = {
                             "type": "string",
                             "enum": ["leaf", "orchestrator"],
                             "description": "Per-task role override. See top-level 'role' for semantics.",
+                        },
+                        "worker_id": {
+                            "type": "string",
+                            "description": "Professional worker id from the Pixel Agents team (for example developer, marketer, or data-analyst). Gives the child that worker's instructions and tool policy.",
+                        },
+                        "deliverable": {
+                            "type": "string",
+                            "description": "Concrete artifact or decision the worker must return.",
+                        },
+                        "acceptance_criteria": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Observable conditions the deliverable must satisfy before it is handed back.",
                         },
                     },
                     "required": ["goal"],
@@ -3927,7 +4041,7 @@ def _model_background_value(args: dict, parent_agent=None) -> bool:
     needs its workers' results within its own turn. The live path is
     ``run_agent._dispatch_delegate_task``; this lambda mirrors it for the rare
     case the intercept is bypassed. Direct Python callers of ``delegate_task``
-    keep the historical synchronous default.
+    keep the historical synchropixel default.
     """
     is_subagent = getattr(parent_agent, "_delegate_depth", 0) > 0
     return not is_subagent

@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils'
 import { $wakeWord, toggleWakeWord } from '@/store/wake-word'
 
 import type { ConversationStatus } from './hooks/use-voice-conversation'
-import { ModelPill } from './model-pill'
 import type { ChatBarState, VoiceStatus } from './types'
 
 export const ICON_BTN = 'size-(--composer-control-size) shrink-0 rounded-md'
@@ -91,7 +90,6 @@ export function ComposerControls({
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
-      <ModelPill compact={compactModelPill} disabled={disabled} model={state.model} />
       <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
       <AutoSpeakButton active={autoSpeak} disabled={disabled} onToggle={onToggleAutoSpeak} />
       <WakeWordButton disabled={disabled} />
@@ -312,7 +310,7 @@ function AutoSpeakButton({ active, disabled, onToggle }: { active: boolean; disa
   )
 }
 
-// "Hey Hermes" wake-word toggle. ALWAYS rendered — the ear never hides. A
+// "Hey Pixel Agents" wake-word toggle. ALWAYS rendered — the ear never hides. A
 // user must always be able to click it to turn passive listening on; if the
 // backend can't start (missing STT/TTS, deps still installing, no mic
 // permission, etc.) the click surfaces the reason in the tooltip and the
@@ -326,7 +324,7 @@ function WakeWordButton({ disabled, pausedForVoice = false }: { disabled: boolea
   const c = t.composer
   const wake = useStore($wakeWord)
 
-  const phrase = wake.phrase || 'hey hermes'
+  const phrase = wake.phrase || 'hey pixel-agents'
 
   const label = pausedForVoice
     ? c.wakeWordPausedVoice(phrase)

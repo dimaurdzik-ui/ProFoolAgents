@@ -17,6 +17,10 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { useI18n } from '@/i18n'
+import { stripAnsi } from '@/lib/ansi'
+import { Loader2 } from '@/lib/icons'
+import { cn } from '@/lib/utils'
 import {
   getSkillHubSources,
   previewSkillHub,
@@ -24,11 +28,7 @@ import {
   searchSkillsHub,
   type SkillHubResult,
   type SkillHubScanResult
-} from '@/hermes'
-import { useI18n } from '@/i18n'
-import { stripAnsi } from '@/lib/ansi'
-import { Loader2 } from '@/lib/icons'
-import { cn } from '@/lib/utils'
+} from '@/pixel-agents'
 import {
   $hubActions,
   $hubActiveLog,

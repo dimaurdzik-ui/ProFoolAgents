@@ -44,7 +44,7 @@ function installDesktopMock(state: DesktopBootstrapState) {
     }
   }
 
-  Object.defineProperty(window, 'hermesDesktop', {
+  Object.defineProperty(window, 'pixelAgentsDesktop', {
     configurable: true,
     value: desktop
   })
@@ -86,63 +86,63 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
-  Reflect.deleteProperty(window, 'hermesDesktop')
+  Reflect.deleteProperty(window, 'pixelAgentsDesktop')
 })
 
 describe('DesktopInstallOverlay first-run setup', () => {
   it('shows the remote/local choice without installer progress', async () => {
     installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents' }
       })
     )
 
     render(<DesktopInstallOverlay />)
 
-    expect(await screen.findByText('Set up Hermes Desktop')).toBeTruthy()
-    expect(screen.getByText('Connect to existing Hermes')).toBeTruthy()
-    expect(screen.getByText('Install Hermes locally')).toBeTruthy()
+    expect(await screen.findByText('Set up Pixel Agents Desktop')).toBeTruthy()
+    expect(screen.getByText('Connect to existing Pixel Agents')).toBeTruthy()
+    expect(screen.getByText('Install Pixel Agents locally')).toBeTruthy()
     expect(screen.queryByText(/steps complete/i)).toBeNull()
     expect(screen.queryByText(/Fetching installer manifest/i)).toBeNull()
   })
 
-  it('continues local bootstrap only when Install Hermes locally is selected', async () => {
+  it('continues local bootstrap only when Install Pixel Agents locally is selected', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents' }
       })
     )
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Install Hermes locally'))
+    fireEvent.click(await screen.findByText('Install Pixel Agents locally'))
 
     expect(desktop.continueBootstrapLocal).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('Set up Hermes Desktop')).toBeTruthy()
+    expect(screen.getByText('Set up Pixel Agents Desktop')).toBeTruthy()
 
     act(() => {
       desktop.emitBootstrapEvent({ type: 'manifest', protocolVersion: 1, stages: [] })
     })
 
-    await waitFor(() => expect(screen.queryByText('Set up Hermes Desktop')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Set up Pixel Agents Desktop')).toBeNull())
     expect(screen.getByText(/Fetching installer manifest/i)).toBeTruthy()
   })
 
   it('surfaces a recoverable error when the local-bootstrap bridge is unavailable', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents' }
       })
     )
 
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    const install = (await screen.findByText('Install Hermes locally')).closest('button') as HTMLButtonElement
+    const install = (await screen.findByText('Install Pixel Agents locally')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     expect(
-      await screen.findByText('Local installation could not start. Restart Hermes Desktop and try again.')
+      await screen.findByText('Local installation could not start. Restart Pixel Agents Desktop and try again.')
     ).toBeTruthy()
     expect(install.disabled).toBe(false)
   })
@@ -150,7 +150,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('keeps the local-start error when the first snapshot commits under the click', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents' }
       })
     )
 
@@ -160,29 +160,31 @@ describe('DesktopInstallOverlay first-run setup', () => {
     // Click the instant the choice paints, before React drains the passive
     // effect that reacts to the first snapshot. A loaded runner hits this
     // window by accident; observing the DOM directly hits it every time.
-    const install = (await whenPresent('Install Hermes locally')).closest('button') as HTMLButtonElement
+    const install = (await whenPresent('Install Pixel Agents locally')).closest('button') as HTMLButtonElement
     fireEvent.click(install)
 
     await act(async () => {
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('Local installation could not start. Restart Hermes Desktop and try again.')).toBeTruthy()
+    expect(
+      screen.queryByText('Local installation could not start. Restart Pixel Agents Desktop and try again.')
+    ).toBeTruthy()
   })
 
   it('clears a stale local-start error when a repair presents a different root', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent' }
+        setupChoice: { platform: 'win32', activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents' }
       })
     )
 
     desktop.continueBootstrapLocal = undefined as never
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click((await screen.findByText('Install Hermes locally')).closest('button') as HTMLButtonElement)
+    fireEvent.click((await screen.findByText('Install Pixel Agents locally')).closest('button') as HTMLButtonElement)
     expect(
-      await screen.findByText('Local installation could not start. Restart Hermes Desktop and try again.')
+      await screen.findByText('Local installation could not start. Restart Pixel Agents Desktop and try again.')
     ).toBeTruthy()
 
     act(() => {
@@ -190,23 +192,25 @@ describe('DesktopInstallOverlay first-run setup', () => {
         type: 'setup-choice',
         active: false,
         platform: 'win32',
-        activeRoot: 'C:\\Users\\me\\AppData\\Local\\hermes\\hermes-agent-repaired'
+        activeRoot: 'C:\\Users\\me\\AppData\\Local\\pixel-agents\\pixel-agents-repaired'
       })
     })
 
-    expect(screen.queryByText('Local installation could not start. Restart Hermes Desktop and try again.')).toBeNull()
+    expect(
+      screen.queryByText('Local installation could not start. Restart Pixel Agents Desktop and try again.')
+    ).toBeNull()
   })
 
   it('opens the remote connection form from the first-run choice', async () => {
     installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
 
     expect(await screen.findByText('Gateway URL')).toBeTruthy()
     expect(screen.getByText('Test connection')).toBeTruthy()
@@ -216,38 +220,38 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('returns from the remote connection form to the first-run choice', async () => {
     installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
     expect(await screen.findByText('Gateway URL')).toBeTruthy()
 
     fireEvent.click(screen.getByText('Back'))
 
-    expect(await screen.findByText('Set up Hermes Desktop')).toBeTruthy()
-    expect(screen.getByText('Install Hermes locally')).toBeTruthy()
+    expect(await screen.findByText('Set up Pixel Agents Desktop')).toBeTruthy()
+    expect(screen.getByText('Install Pixel Agents locally')).toBeTruthy()
   })
 
   it('requires a successful token connection test before applying remote config', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     desktop.probeConnectionConfig.mockResolvedValue({
       authMode: 'token',
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       error: null,
       providers: [],
       reachable: true,
       version: '0.17.0'
     })
     desktop.testConnectionConfig.mockResolvedValue({
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       ok: true,
       version: '0.17.0'
     })
@@ -259,9 +263,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
-      target: { value: 'https://gateway.example.com/hermes' }
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/pixel-agents'), {
+      target: { value: 'https://gateway.example.com/pixel-agents' }
     })
 
     const apply = screen.getByText('Apply and reconnect').closest('button') as HTMLButtonElement
@@ -281,11 +285,11 @@ describe('DesktopInstallOverlay first-run setup', () => {
         mode: 'remote',
         remoteAuthMode: 'token',
         remoteToken: 'session-secret',
-        remoteUrl: 'https://gateway.example.com/hermes'
+        remoteUrl: 'https://gateway.example.com/pixel-agents'
       })
     })
 
-    await screen.findByText('Connected to https://gateway.example.com/hermes (0.17.0).')
+    await screen.findByText('Connected to https://gateway.example.com/pixel-agents (0.17.0).')
     expect(apply.disabled).toBe(false)
 
     fireEvent.click(screen.getByText('Apply and reconnect'))
@@ -295,7 +299,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
         mode: 'remote',
         remoteAuthMode: 'token',
         remoteToken: 'session-secret',
-        remoteUrl: 'https://gateway.example.com/hermes'
+        remoteUrl: 'https://gateway.example.com/pixel-agents'
       })
     })
     await waitFor(() => expect(screen.queryByText('Gateway URL')).toBeNull())
@@ -304,7 +308,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('ignores a completed probe after the gateway URL becomes invalid', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
@@ -318,9 +322,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
-    const urlInput = await screen.findByPlaceholderText('https://gateway.example.com/hermes')
-    fireEvent.change(urlInput, { target: { value: 'https://gateway.example.com/hermes' } })
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
+    const urlInput = await screen.findByPlaceholderText('https://gateway.example.com/pixel-agents')
+    fireEvent.change(urlInput, { target: { value: 'https://gateway.example.com/pixel-agents' } })
 
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 550))
@@ -331,7 +335,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     await act(async () => {
       resolveProbe?.({
         authMode: 'token',
-        baseUrl: 'https://gateway.example.com/hermes',
+        baseUrl: 'https://gateway.example.com/pixel-agents',
         error: null,
         providers: [],
         reachable: true,
@@ -348,13 +352,13 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('does not enable Apply when credentials change during a connection test', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     desktop.probeConnectionConfig.mockResolvedValue({
       authMode: 'token',
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       error: null,
       providers: [],
       reachable: true,
@@ -371,9 +375,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
-      target: { value: 'https://gateway.example.com/hermes' }
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/pixel-agents'), {
+      target: { value: 'https://gateway.example.com/pixel-agents' }
     })
 
     await act(async () => {
@@ -390,31 +394,31 @@ describe('DesktopInstallOverlay first-run setup', () => {
     fireEvent.change(tokenInput, { target: { value: 'token-b' } })
 
     await act(async () => {
-      resolveTest?.({ baseUrl: 'https://gateway.example.com/hermes', ok: true, version: '0.17.0' })
+      resolveTest?.({ baseUrl: 'https://gateway.example.com/pixel-agents', ok: true, version: '0.17.0' })
       await pendingTest
     })
 
-    expect(screen.queryByText('Connected to https://gateway.example.com/hermes (0.17.0).')).toBeNull()
+    expect(screen.queryByText('Connected to https://gateway.example.com/pixel-agents (0.17.0).')).toBeNull()
     expect(apply.disabled).toBe(true)
   })
 
   it('restores remote apply controls when applying the tested connection fails', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     desktop.probeConnectionConfig.mockResolvedValue({
       authMode: 'token',
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       error: null,
       providers: [],
       reachable: true,
       version: '0.17.0'
     })
     desktop.testConnectionConfig.mockResolvedValue({
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       ok: true,
       version: '0.17.0'
     })
@@ -422,9 +426,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
-      target: { value: 'https://gateway.example.com/hermes' }
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/pixel-agents'), {
+      target: { value: 'https://gateway.example.com/pixel-agents' }
     })
 
     await act(async () => {
@@ -435,7 +439,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
       target: { value: 'session-secret' }
     })
     fireEvent.click(screen.getByText('Test connection'))
-    await screen.findByText('Connected to https://gateway.example.com/hermes (0.17.0).')
+    await screen.findByText('Connected to https://gateway.example.com/pixel-agents (0.17.0).')
 
     const apply = screen.getByText('Apply and reconnect').closest('button') as HTMLButtonElement
     fireEvent.click(apply)
@@ -448,25 +452,25 @@ describe('DesktopInstallOverlay first-run setup', () => {
   it('signs in, tests, and applies a password-style remote gateway', async () => {
     const desktop = installDesktopMock(
       bootstrapState({
-        setupChoice: { platform: 'linux', activeRoot: '/home/me/.hermes/hermes-agent' }
+        setupChoice: { platform: 'linux', activeRoot: '/home/me/.pixel-agents/pixel-agents' }
       })
     )
 
     desktop.probeConnectionConfig.mockResolvedValue({
       authMode: 'oauth',
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       error: null,
       providers: [{ displayName: 'Username & Password', name: 'password', supportsPassword: true }],
       reachable: true,
       version: '0.17.0'
     })
     desktop.oauthLoginConnectionConfig.mockResolvedValue({
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       connected: true,
       ok: true
     })
     desktop.testConnectionConfig.mockResolvedValue({
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       ok: true,
       version: null
     })
@@ -474,9 +478,9 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    fireEvent.click(await screen.findByText('Connect to existing Hermes'))
-    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/hermes'), {
-      target: { value: 'https://gateway.example.com/hermes' }
+    fireEvent.click(await screen.findByText('Connect to existing Pixel Agents'))
+    fireEvent.change(await screen.findByPlaceholderText('https://gateway.example.com/pixel-agents'), {
+      target: { value: 'https://gateway.example.com/pixel-agents' }
     })
 
     await act(async () => {
@@ -487,7 +491,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
     fireEvent.click(await screen.findByText('Sign in'))
 
     await waitFor(() => {
-      expect(desktop.oauthLoginConnectionConfig).toHaveBeenCalledWith('https://gateway.example.com/hermes')
+      expect(desktop.oauthLoginConnectionConfig).toHaveBeenCalledWith('https://gateway.example.com/pixel-agents')
     })
 
     fireEvent.click(screen.getByText('Test connection'))
@@ -497,11 +501,11 @@ describe('DesktopInstallOverlay first-run setup', () => {
         mode: 'remote',
         remoteAuthMode: 'oauth',
         remoteToken: undefined,
-        remoteUrl: 'https://gateway.example.com/hermes'
+        remoteUrl: 'https://gateway.example.com/pixel-agents'
       })
     })
 
-    await screen.findByText('Connected to https://gateway.example.com/hermes.')
+    await screen.findByText('Connected to https://gateway.example.com/pixel-agents.')
     const apply = screen.getByText('Apply and reconnect').closest('button') as HTMLButtonElement
     expect(apply.disabled).toBe(false)
     fireEvent.click(apply)
@@ -511,7 +515,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
         mode: 'remote',
         remoteAuthMode: 'oauth',
         remoteToken: undefined,
-        remoteUrl: 'https://gateway.example.com/hermes'
+        remoteUrl: 'https://gateway.example.com/pixel-agents'
       })
     })
   })
@@ -521,7 +525,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
       bootstrapState({
         unsupportedPlatform: {
           platform: 'darwin',
-          activeRoot: '/Users/me/.hermes/hermes-agent',
+          activeRoot: '/Users/me/.pixel-agents/pixel-agents',
           installCommand: 'curl -fsSL https://example.invalid/install.sh | sh',
           docsUrl: 'https://example.invalid/docs'
         }
@@ -530,7 +534,7 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     render(<DesktopInstallOverlay />)
 
-    expect(await screen.findByText('Hermes needs a one-time install')).toBeTruthy()
+    expect(await screen.findByText('Pixel Agents needs a one-time install')).toBeTruthy()
 
     fireEvent.click(screen.getByText('Connect existing'))
 
@@ -538,14 +542,14 @@ describe('DesktopInstallOverlay first-run setup', () => {
 
     desktop.probeConnectionConfig.mockResolvedValue({
       authMode: 'token',
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       error: null,
       providers: [],
       reachable: true,
       version: '0.17.0'
     })
     desktop.testConnectionConfig.mockResolvedValue({
-      baseUrl: 'https://gateway.example.com/hermes',
+      baseUrl: 'https://gateway.example.com/pixel-agents',
       ok: true,
       version: '0.17.0'
     })
@@ -555,8 +559,8 @@ describe('DesktopInstallOverlay first-run setup', () => {
       return { mode: 'remote' }
     })
 
-    fireEvent.change(screen.getByPlaceholderText('https://gateway.example.com/hermes'), {
-      target: { value: 'https://gateway.example.com/hermes' }
+    fireEvent.change(screen.getByPlaceholderText('https://gateway.example.com/pixel-agents'), {
+      target: { value: 'https://gateway.example.com/pixel-agents' }
     })
 
     await act(async () => {
@@ -567,10 +571,10 @@ describe('DesktopInstallOverlay first-run setup', () => {
       target: { value: 'session-secret' }
     })
     fireEvent.click(screen.getByText('Test connection'))
-    await screen.findByText('Connected to https://gateway.example.com/hermes (0.17.0).')
+    await screen.findByText('Connected to https://gateway.example.com/pixel-agents (0.17.0).')
     fireEvent.click(screen.getByText('Apply and reconnect'))
 
     await waitFor(() => expect(screen.queryByText('Gateway URL')).toBeNull())
-    expect(screen.queryByText('Hermes needs a one-time install')).toBeNull()
+    expect(screen.queryByText('Pixel Agents needs a one-time install')).toBeNull()
   })
 })

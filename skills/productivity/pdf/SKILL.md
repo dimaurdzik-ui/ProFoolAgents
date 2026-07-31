@@ -2,11 +2,11 @@
 name: pdf
 description: "Create, merge, split, fill, and secure PDF files."
 version: 1.0.0
-author: Anthropic (adapted by Nous Research)
+author: Anthropic (adapted by Pixel Agents)
 license: Proprietary. LICENSE.txt has complete terms
 platforms: [linux, macos, windows]
 metadata:
-  hermes:
+  pixel-agents:
     tags: [PDF, Documents, Forms, Office, Productivity]
     category: productivity
     related_skills: [ocr-and-documents, nano-pdf, docx, xlsx]

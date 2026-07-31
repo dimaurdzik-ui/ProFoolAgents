@@ -335,6 +335,11 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
               running && 'shimmer text-foreground/65'
             )}
           >
+            {node.workerName ? (
+              <span className="mr-1.5 text-[0.7rem] font-semibold tracking-wide text-primary/85 uppercase">
+                {node.workerName}
+              </span>
+            ) : null}
             {node.goal}
           </span>
           {subtitle.length > 0 ? (
@@ -357,6 +362,31 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
               rowKey={`${node.id}:${entry.kind}:${entry.at}`}
             />
           ))}
+        </div>
+      ) : null}
+
+      {open && (node.deliverable || node.acceptanceCriteria?.length) ? (
+        <div className="grid min-w-0 gap-1 pl-6" data-selectable-text="true">
+          {node.deliverable ? (
+            <>
+              <p className="text-[0.58rem] font-medium tracking-wider text-muted-foreground/60 uppercase">
+                {t.agents.deliverable}
+              </p>
+              <p className="wrap-anywhere text-[0.7rem] leading-relaxed text-muted-foreground/85">{node.deliverable}</p>
+            </>
+          ) : null}
+          {node.acceptanceCriteria?.length ? (
+            <>
+              <p className="mt-1 text-[0.58rem] font-medium tracking-wider text-muted-foreground/60 uppercase">
+                {t.agents.acceptanceCriteria}
+              </p>
+              {node.acceptanceCriteria.map((criterion, index) => (
+                <p className="wrap-anywhere text-[0.7rem] leading-relaxed text-muted-foreground/80" key={`${criterion}:${index}`}>
+                  · {criterion}
+                </p>
+              ))}
+            </>
+          ) : null}
         </div>
       ) : null}
 

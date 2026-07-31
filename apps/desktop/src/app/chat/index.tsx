@@ -16,14 +16,16 @@ import { PromptOverlays } from '@/components/prompt-overlays'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/ui/error-state'
 import { TitleMenuTrigger } from '@/components/ui/title-menu-trigger'
-import { type HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
 import type { ChatMessage } from '@/lib/chat-messages'
 import { quickModelOptions, sessionTitle } from '@/lib/chat-runtime'
 import { useIncrementalExternalStoreRuntime } from '@/lib/incremental-external-store-runtime'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { cn } from '@/lib/utils'
+import { type PixelAgentsGateway } from '@/pixel-agents'
+import { $selectedAgentId } from '@/store/custom-agents'
 import { migrateSessionDraft } from '@/store/composer'
+import { useAgents } from './composer/use-agents'
 import { migrateQueuedPrompts, parkQueuedPrompts } from '@/store/composer-queue'
 import { $pinnedSessionIds } from '@/store/layout'
 import { $petActive } from '@/store/pet'
@@ -42,7 +44,7 @@ import {
   sessionPinId
 } from '@/store/session'
 import { isSecondaryWindow, isWatchWindow } from '@/store/windows'
-import type { ModelOptionsResponse } from '@/types/hermes'
+import type { ModelOptionsResponse } from '@/types/pixel-agents'
 
 import { primaryRouteSelectedSessionId, routeSessionId } from '../routes'
 import { titlebarHeaderBaseClass, titlebarHeaderShadowClass, titlebarHeaderTitleClass } from '../shell/titlebar'
@@ -64,7 +66,7 @@ import { SessionActionsMenu } from './sidebar/session-actions-menu'
 import { threadLoadingState } from './thread-loading'
 
 interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
-  gateway: HermesGateway | null
+  gateway: PixelAgentsGateway | null
   modelMenuContent?: React.ReactNode
   onToggleSelectedPin: () => void
   onDeleteSelectedSession: () => void
@@ -367,6 +369,12 @@ export function ChatView({
     !activeSessionId &&
     messagesEmpty
 
+  const selectedAgentId = useStore($selectedAgentId)
+  const { catalog } = useAgents()
+  const activeAgent = useMemo(() => {
+    return catalog.find(a => a.id === selectedAgentId)
+  }, [catalog, selectedAgentId])
+
   // Session is still loading if the route references a session we haven't
   // resumed yet. Once `activeSessionId` is set (runtime has resumed), the
   // session exists — even if it has zero messages (a brand-new routed
@@ -561,30 +569,49 @@ export function ChatView({
             states stay mounted here, so dock⇄float never remounts the editor. */}
         {showChatBar && (
           <Suspense fallback={<ChatBarFallback />}>
-            <ChatBar
-              busy={busy}
-              cwd={currentCwd}
-              disabled={!gatewayOpen}
-              focusKey={activeSessionId}
-              gateway={gateway}
-              maxRecordingSeconds={maxVoiceRecordingSeconds}
-              onAddContextRef={onAddContextRef}
-              onAddUrl={onAddUrl}
-              onAttachDroppedItems={onAttachDroppedItems}
-              onAttachImageBlob={onAttachImageBlob}
-              onCancel={onCancel}
-              onPasteClipboardImage={onPasteClipboardImage}
-              onPickFiles={onPickFiles}
-              onPickFolders={onPickFolders}
-              onPickImages={onPickImages}
-              onRemoveAttachment={onRemoveAttachment}
-              onSteer={onSteer}
-              onSubmit={onSubmit}
-              onTranscribeAudio={onTranscribeAudio}
-              queueSessionKey={queueSessionKey}
-              sessionId={activeSessionId}
-              state={chatBarState}
-            />
+            <div className="relative w-full z-20 flex flex-col items-center">
+              {messagesEmpty && activeAgent && activeAgent.starter_prompts && activeAgent.starter_prompts.length > 0 && (
+                <div className="w-full max-w-3xl px-4 pb-2 mb-2">
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {activeAgent.starter_prompts.map((prompt, i) => (
+                      <button
+                        key={i}
+                        className="px-3 py-1.5 text-xs font-medium rounded-full bg-secondary/80 hover:bg-secondary text-secondary-foreground border border-border/50 shadow-sm transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        onClick={() => {
+                          requestComposerInsert(prompt, { mode: 'block', target: composerScope.target })
+                        }}
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <ChatBar
+                busy={busy}
+                cwd={currentCwd}
+                disabled={!gatewayOpen}
+                focusKey={activeSessionId}
+                gateway={gateway}
+                maxRecordingSeconds={maxVoiceRecordingSeconds}
+                onAddContextRef={onAddContextRef}
+                onAddUrl={onAddUrl}
+                onAttachDroppedItems={onAttachDroppedItems}
+                onAttachImageBlob={onAttachImageBlob}
+                onCancel={onCancel}
+                onPasteClipboardImage={onPasteClipboardImage}
+                onPickFiles={onPickFiles}
+                onPickFolders={onPickFolders}
+                onPickImages={onPickImages}
+                onRemoveAttachment={onRemoveAttachment}
+                onSteer={onSteer}
+                onSubmit={onSubmit}
+                onTranscribeAudio={onTranscribeAudio}
+                queueSessionKey={queueSessionKey}
+                sessionId={activeSessionId}
+                state={chatBarState}
+              />
+            </div>
           </Suspense>
         )}
       </ChatRuntimeBoundary>

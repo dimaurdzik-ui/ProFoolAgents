@@ -1,10 +1,10 @@
 {
-  "name": "hermes",
-  "productName": "Hermes",
+  "name": "pixel-agents",
+  "productName": "Pixel Agents",
   "private": true,
   "version": "0.17.0",
-  "description": "Native desktop shell for Hermes Agent.",
-  "author": "Nous Research",
+  "description": "Native desktop shell for Pixel Core.",
+  "author": "Pixel Agents",
   "type": "module",
   "main": "dist/electron-main.mjs",
   "engines": {
@@ -12,16 +12,16 @@
   },
   "scripts": {
     "clean": "npm run clean:e2e && npm run clean:renderer && npm run clean:electron",
-    "clean:e2e":"tsc --build tsconfig.e2e.json --clean",
-    "clean:renderer":"tsc --build tsconfig.json --clean ",
-    "clean:electron":"tsc --build tsconfig.electron.json --clean",
+    "clean:e2e": "tsc --build tsconfig.e2e.json --clean",
+    "clean:renderer": "tsc --build tsconfig.json --clean ",
+    "clean:electron": "tsc --build tsconfig.electron.json --clean",
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "dev:fake-boot": "cross-env HERMES_DESKTOP_BOOT_FAKE=1 HERMES_DESKTOP_BOOT_FAKE_STEP_MS=650 npm run dev",
+    "dev:fake-boot": "cross-env PIXEL_AGENTS_DESKTOP_BOOT_FAKE=1 PIXEL_AGENTS_DESKTOP_BOOT_FAKE_STEP_MS=650 npm run dev",
     "dev:mock": "node scripts/dev-mock.mjs",
     "dev:renderer": "node scripts/assert-root-install.mjs && npm run clean:renderer && vite --host 127.0.0.1 --port 5174",
-    "dev:electron": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
-    "profile:main": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron --inspect=9229 .",
-    "profile:main:cpu": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 NODE_OPTIONS=--cpu-prof HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
+    "dev:electron": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 PIXEL_AGENTS_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
+    "profile:main": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 PIXEL_AGENTS_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron --inspect=9229 .",
+    "profile:main:cpu": "tsc --build tsconfig.electron.json && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 NODE_OPTIONS=--cpu-prof PIXEL_AGENTS_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
     "start": "npm run build && electron .",
     "prebuild": "npm run clean",
     "build": "node scripts/assert-root-install.mjs && node scripts/write-build-stamp.mjs && vite build && node scripts/bundle-electron-main.mjs && node scripts/stage-native-deps.mjs",
@@ -76,11 +76,10 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@hermes/shared": "file:../shared",
+    "@pixel-agents/shared": "file:../shared",
     "@icons-pack/react-simple-icons": "=13.11.1",
     "@lezer/highlight": "^1.2.3",
     "@nanostores/react": "^1.1.0",
-    "@nous-research/ui": "^0.13.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@streamdown/code": "^1.1.1",
     "@tabler/icons-react": "^3.41.1",
@@ -101,6 +100,7 @@
     "d3-force": "^3.0.0",
     "dnd-core": "^14.0.1",
     "dompurify": "^3.4.11",
+    "electron-store": "^11.0.2",
     "emojibase-data": "^16.0.3",
     "fflate": "^0.8.3",
     "frimousse": "^0.3.0",
@@ -171,18 +171,18 @@
   },
   "build": {
     "electronVersion": "40.10.2",
-    "appId": "com.nousresearch.hermes",
-    "productName": "Hermes",
-    "executableName": "Hermes",
+    "appId": "com.pixelagents.desktop",
+    "productName": "Pixel Agents",
+    "executableName": "Pixel Agents",
     "protocols": [
       {
-        "name": "Hermes Protocol",
+        "name": "Pixel Agents Protocol",
         "schemes": [
-          "hermes"
+          "pixel-agents"
         ]
       }
     ],
-    "artifactName": "Hermes-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Pixel Agents-${version}-${os}-${arch}.${ext}",
     "icon": "assets/icon",
     "directories": {
       "output": "release"
@@ -218,12 +218,12 @@
       "entitlements": "electron/entitlements.mac.plist",
       "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
       "extendInfo": {
-        "CFBundleDisplayName": "Hermes",
-        "CFBundleExecutable": "Hermes",
-        "CFBundleName": "Hermes",
-        "NSAudioCaptureUsageDescription": "Hermes uses audio capture for voice conversations.",
-        "NSCameraUsageDescription": "Hermes uses the camera when a plugin or feature you enable requests it.",
-        "NSMicrophoneUsageDescription": "Hermes uses the microphone for voice input and voice conversations."
+        "CFBundleDisplayName": "Pixel Agents",
+        "CFBundleExecutable": "Pixel Agents",
+        "CFBundleName": "Pixel Agents",
+        "NSAudioCaptureUsageDescription": "Pixel Agents uses audio capture for voice conversations.",
+        "NSCameraUsageDescription": "Pixel Agents uses the camera when a plugin or feature you enable requests it.",
+        "NSMicrophoneUsageDescription": "Pixel Agents uses the microphone for voice input and voice conversations."
       },
       "gatekeeperAssess": false,
       "hardenedRuntime": true,
@@ -233,7 +233,7 @@
       ]
     },
     "dmg": {
-      "title": "Install Hermes",
+      "title": "Install Pixel Agents",
       "backgroundColor": "#f5f5f7",
       "iconSize": 96,
       "window": {
@@ -255,7 +255,7 @@
       ]
     },
     "win": {
-      "legalTrademarks": "Hermes",
+      "legalTrademarks": "Pixel Agents",
       "target": [
         "nsis",
         "msi"
@@ -264,8 +264,8 @@
     },
     "linux": {
       "category": "Development",
-      "maintainer": "Nous Research <support@nousresearch.com>",
-      "synopsis": "Native desktop shell for Hermes Agent.",
+      "maintainer": "Pixel Agents <support@pixelagents.com>",
+      "synopsis": "Native desktop shell for Pixel Core.",
       "target": [
         "AppImage",
         "deb",
@@ -276,8 +276,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "shortcutName": "Hermes",
-      "uninstallDisplayName": "Hermes",
+      "shortcutName": "Pixel Agents",
+      "uninstallDisplayName": "Pixel Agents",
       "warningsAsErrors": false
     }
   }

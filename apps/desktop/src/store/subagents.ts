@@ -16,6 +16,12 @@ export interface SubagentProgress {
   id: string
   parentId: null | string
   goal: string
+  /** The professional template assigned by the team orchestrator. */
+  workerId?: string
+  workerName?: string
+  /** Explicit result contract supplied to the delegated worker. */
+  deliverable?: string
+  acceptanceCriteria?: string[]
   /** The child's own stored session id — lets UIs open its session window. */
   sessionId?: string
   model?: string
@@ -158,6 +164,12 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
     id: prev?.id ?? idOf(payload),
     parentId: str(payload.parent_id) || prev?.parentId || null,
     goal: str(payload.goal) || prev?.goal || 'Subagent',
+    workerId: str(payload.worker_id) || prev?.workerId,
+    workerName: str(payload.worker_name) || prev?.workerName,
+    deliverable: str(payload.deliverable) || prev?.deliverable,
+    acceptanceCriteria: strList(payload.acceptance_criteria).length
+      ? strList(payload.acceptance_criteria)
+      : prev?.acceptanceCriteria,
     sessionId: str(payload.child_session_id) || prev?.sessionId,
     model: str(payload.model) || prev?.model,
     status,

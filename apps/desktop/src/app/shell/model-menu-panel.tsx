@@ -19,13 +19,13 @@ import {
 import { HighlightMatches } from '@/components/ui/highlight-matches'
 import { usePointerQuiet } from '@/components/ui/keyboard-first'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { HermesGateway } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { currentPickerSelection, displayModelName, modelDisplayParts } from '@/lib/model-status-label'
 import { DEFAULT_REASONING_EFFORT, reasoningEffortLabel } from '@/lib/reasoning-effort'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
+import type { PixelAgentsGateway } from '@/pixel-agents'
 import { $modelPresets, applyModelPreset, modelPresetKey } from '@/store/model-presets'
 import {
   $visibleModels,
@@ -38,7 +38,7 @@ import {
 } from '@/store/model-visibility'
 import { $collapsedProviders, toggleCollapsedProvider } from '@/store/provider-collapse'
 import { $defaultReasoningEffort } from '@/store/session'
-import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/hermes'
+import type { ModelOptionProvider, ModelOptionsResponse } from '@/types/pixel-agents'
 
 import { ModelEditSubmenu, resolveFastControl } from './model-edit-submenu'
 
@@ -56,7 +56,7 @@ export interface ModelSelection {
 }
 
 interface ModelMenuPanelProps {
-  gateway?: HermesGateway
+  gateway?: PixelAgentsGateway
   onSelectModel: (selection: ModelSelection) => Promise<boolean> | void
   profile?: string
   requestGateway: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -163,7 +163,7 @@ export function ModelMenuPanel({ gateway, onSelectModel, profile = 'default', re
   }
 
   // Selecting a model row restores that model's remembered preset onto the
-  // session (effort/fast), gated by capability. Unset → Hermes defaults.
+  // session (effort/fast), gated by capability. Unset → Pixel Agents defaults.
   const selectFamily = async (family: ModelFamily, provider: ModelOptionProvider) => {
     const caps = provider.capabilities?.[family.id]
     const preset = modelPresets[modelPresetKey(provider.slug, family.id)] ?? {}
@@ -416,7 +416,7 @@ export function ModelMenuPanel({ gateway, onSelectModel, profile = 'default', re
                     const caps = group.provider.capabilities?.[family.id]
 
                     // Effective settings for this row: live session state when it's
-                    // the active model, otherwise its remembered preset (Hermes
+                    // the active model, otherwise its remembered preset (Pixel Agents
                     // defaults when unset). Row label AND submenu read from these so
                     // they never disagree.
                     const preset = modelPresets[modelPresetKey(group.provider.slug, family.id)] ?? {}

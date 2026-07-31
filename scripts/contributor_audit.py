@@ -48,20 +48,20 @@ IGNORED_PATTERNS = [
     re.compile(r"^github-actions(\[bot\])?$", re.IGNORECASE),
     re.compile(r"^dependabot", re.IGNORECASE),
     re.compile(r"^renovate", re.IGNORECASE),
-    re.compile(r"^Hermes\s+(Agent|Audit)$", re.IGNORECASE),
-    re.compile(r"^nousbot(-eng)?$", re.IGNORECASE),
+    re.compile(r"^Pixel Agents\s+(Agent|Audit)$", re.IGNORECASE),
+    re.compile(r"^pixelbot(-eng)?$", re.IGNORECASE),
     re.compile(r"^Ubuntu$", re.IGNORECASE),
 ]
 
 IGNORED_EMAILS = {
     "noreply@anthropic.com",
     "noreply@github.com",
-    "noreply@nousresearch.com",
+    "noreply@pixelagents.com",
     "cursoragent@cursor.com",
-    "hermes@nousresearch.com",
-    "hermes-audit@example.com",
-    "nousbot@nousresearch.com",
-    "hermes@habibilabs.dev",
+    "pixel-agents@pixelagents.com",
+    "pixel-agents-audit@example.com",
+    "pixelbot@pixelagents.com",
+    "pixel-agents@habibilabs.dev",
     "omx@oh-my-codex.dev",
     "codex@openai.com",
     "noreply@commandcode.ai",
@@ -106,7 +106,7 @@ def gh_pr_list():
         result = subprocess.run(
             [
                 "gh", "pr", "list",
-                "--repo", "NousResearch/hermes-agent",
+                "--repo", "PixelResearch/pixel-agents",
                 "--state", "merged",
                 "--json", "number,title,body,author,mergedAt",
                 "--limit", "300",

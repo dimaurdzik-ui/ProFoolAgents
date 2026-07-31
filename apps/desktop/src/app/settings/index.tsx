@@ -3,12 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import { codiconIcon } from '@/components/ui/codicon'
 import { Tip } from '@/components/ui/tooltip'
-import { getHermesConfigDefaults, getHermesConfigRecord, saveHermesConfig } from '@/hermes'
+import { FEATURES } from '@/config/features'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import {
   Archive,
-  BarChart3,
   Bell,
   Download,
   Globe,
@@ -22,6 +21,7 @@ import {
   Wrench,
   Zap
 } from '@/lib/icons'
+import { getPixelAgentsConfigDefaults, getPixelAgentsConfigRecord, savePixelAgentsConfig } from '@/pixel-agents'
 import { notifyError } from '@/store/notifications'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
@@ -32,7 +32,6 @@ import { SKILLS_ROUTE } from '../routes'
 
 import { AboutSettings } from './about-settings'
 import { AppearanceSettings } from './appearance-settings'
-import { BillingSettings } from './billing'
 import { ConfigSettings } from './config-settings'
 import { SECTIONS } from './constants'
 import { GatewaySettings } from './gateway-settings'
@@ -51,7 +50,7 @@ const SETTINGS_VIEWS: readonly SettingsViewId[] = [
   'keybinds',
   'keys',
   'notifications',
-  'billing',
+
   'plugins',
   'sessions',
   'about'
@@ -113,12 +112,12 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
 
   const exportConfig = async () => {
     try {
-      const cfg = await getHermesConfigRecord()
+      const cfg = await getPixelAgentsConfigRecord()
       const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'hermes-config.json'
+      a.download = 'pixel-agents-config.json'
       a.click()
       URL.revokeObjectURL(url)
       triggerHaptic('success')
@@ -133,7 +132,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
     }
 
     try {
-      await saveHermesConfig(await getHermesConfigDefaults())
+      await savePixelAgentsConfig(await getPixelAgentsConfigDefaults())
       triggerHaptic('success')
       onConfigSaved?.()
     } catch (err) {
@@ -161,13 +160,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         label: t.settings.nav.notifications,
         onSelect: () => setActiveView('notifications')
       },
-      {
-        active: activeView === 'billing',
-        icon: BarChart3,
-        id: 'billing',
-        label: t.settings.nav.billing,
-        onSelect: () => setActiveView('billing')
-      },
+
       {
         active: activeView === 'providers',
         children: [
@@ -199,13 +192,17 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         label: t.settings.nav.providers,
         onSelect: () => setActiveView('providers')
       },
-      {
-        active: activeView === 'gateway',
-        icon: Globe,
-        id: 'gateway',
-        label: t.settings.nav.gateway,
-        onSelect: () => setActiveView('gateway')
-      },
+      ...(FEATURES.remoteGateway
+        ? [
+            {
+              active: activeView === 'gateway',
+              icon: Globe,
+              id: 'gateway' as const,
+              label: t.settings.nav.gateway,
+              onSelect: () => setActiveView('gateway')
+            }
+          ]
+        : []),
       {
         active: activeView === 'keybinds',
         icon: Keyboard,
@@ -326,8 +323,6 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
             <KeysSettings view={keysView} />
           ) : activeView === 'notifications' ? (
             <NotificationsSettings />
-          ) : activeView === 'billing' ? (
-            <BillingSettings />
           ) : activeView === 'plugins' ? (
             <PluginsSettings />
           ) : (

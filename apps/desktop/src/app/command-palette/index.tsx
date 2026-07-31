@@ -18,7 +18,6 @@ import { codiconIcon } from '@/components/ui/codicon'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { HighlightMatches } from '@/components/ui/highlight-matches'
 import { KbdCombo } from '@/components/ui/kbd'
-import { getHermesConfigRecord, listAllProfileSessions } from '@/hermes'
 import { useI18n } from '@/i18n'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
@@ -60,6 +59,7 @@ import {
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 import { resolveVersionStatus } from '@/lib/version-status'
+import { getPixelAgentsConfigRecord, listAllProfileSessions } from '@/pixel-agents'
 import { $repoWorktrees } from '@/store/coding-status'
 import {
   $commandPaletteOpen,
@@ -363,7 +363,7 @@ const PaletteRow = memo(function PaletteRow({
   )
 })
 
-// Hermes session ids: <YYYYMMDD>_<HHMMSS>_<6 hex>. Used to offer a direct
+// Pixel Agents session ids: <YYYYMMDD>_<HHMMSS>_<6 hex>. Used to offer a direct
 // "Go to session ‹id›" jump for ids that aren't in the recent-200 list.
 const SESSION_ID_RE = /^\d{8}_\d{6}_[a-f0-9]{6}$/
 
@@ -598,7 +598,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
   // reopen paints from cache and revalidates in the background.
   const configQuery = useQuery({
     queryKey: ['command-palette', 'config'],
-    queryFn: getHermesConfigRecord
+    queryFn: getPixelAgentsConfigRecord
   })
 
   const sessionsQuery = useQuery({
@@ -875,9 +875,9 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
           {
             detail: updateVersionLabel,
             icon: Download,
-            id: 'cc-update-hermes',
-            keywords: ['update', 'upgrade', 'hermes', 'version', 'system', 'restart'],
-            label: cc.updateHermes,
+            id: 'cc-update-pixel-agents',
+            keywords: ['update', 'upgrade', 'pixel-agents', 'version', 'system', 'restart'],
+            label: cc.updatePixelAgents,
             run: () => requestActiveUpdate()
           }
         ]
@@ -1030,7 +1030,7 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
       ]
     })
 
-    // Apply a theme directly from the root search (e.g. "nous" → Nous). Live
+    // Apply a theme directly from the root search (e.g. "pixel" → Pixel). Live
     // preview via keepOpen, mirroring the nested theme picker. If the theme
     // can't render the current light/dark mode, flip to the one it supports.
     result.push({

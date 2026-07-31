@@ -1,18 +1,18 @@
 ---
-title: "Nous Tool Gateway"
-description: "One subscription, every tool. Web search, image generation, TTS, and cloud browsers — all routed through Nous Portal with no extra API keys."
+title: "Pixel Tool Gateway"
+description: "One subscription, every tool. Web search, image generation, TTS, and cloud browsers — all routed through Pixel Portal with no extra API keys."
 sidebar_label: "Tool Gateway"
 sidebar_position: 2
 ---
 
-# Nous Tool Gateway
+# Pixel Tool Gateway
 
 **One subscription. Every tool built in.**
 
-The Tool Gateway is included with every paid [Nous Portal](https://portal.nousresearch.com) subscription. It routes Hermes' tool calls — web search, image generation, text-to-speech, and cloud browser automation — through infrastructure Nous already runs, so you don't have to sign up with Firecrawl, FAL, OpenAI, Browser Use, or anyone else just to make your agent useful.
+The Tool Gateway is included with every paid [Pixel Portal](https://portal.pixelagents.com) subscription. It routes Pixel Agents' tool calls — web search, image generation, text-to-speech, and cloud browser automation — through infrastructure Pixel already runs, so you don't have to sign up with Firecrawl, FAL, OpenAI, Browser Use, or anyone else just to make your agent useful.
 
 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '1.5rem 0'}}>
-  <a href="https://portal.nousresearch.com/manage-subscription" style={{background: 'var(--ifm-color-primary)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold'}}>Start or manage subscription →</a>
+  <a href="https://portal.pixelagents.com/manage-subscription" style={{background: 'var(--ifm-color-primary)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold'}}>Start or manage subscription →</a>
 </div>
 
 ## What's included
@@ -20,19 +20,19 @@ The Tool Gateway is included with every paid [Nous Portal](https://portal.nousre
 | | Tool | What you get |
 |---|---|---|
 | 🔍 | **Web search & extract** | Agent-grade web search and full-page extraction via Firecrawl. No rate limits to worry about — the gateway handles scaling. |
-| 🎨 | **Image generation** | Nine models under one endpoint: **FLUX 2 Klein 9B**, **FLUX 2 Pro**, **Z-Image Turbo**, **Nano Banana Pro** (Gemini 3 Pro Image), **GPT Image 1.5**, **GPT Image 2**, **Ideogram V3**, **Recraft V4 Pro**, **Qwen Image**. Pick per-generation with a flag, or let Hermes default to FLUX 2 Klein. |
+| 🎨 | **Image generation** | Nine models under one endpoint: **FLUX 2 Klein 9B**, **FLUX 2 Pro**, **Z-Image Turbo**, **Nano Banana Pro** (Gemini 3 Pro Image), **GPT Image 1.5**, **GPT Image 2**, **Ideogram V3**, **Recraft V4 Pro**, **Qwen Image**. Pick per-generation with a flag, or let Pixel Agents default to FLUX 2 Klein. |
 | 🔊 | **Text-to-speech** | OpenAI TTS voices wired into the `text_to_speech` tool. Drop voice notes into Telegram, generate audio for pipelines, narrate anything. |
 | 🌐 | **Cloud browser automation** | Headless Chromium sessions via Browser Use. `browser_navigate`, `browser_click`, `browser_type`, `browser_vision` — all the agent-driving primitives, no Browserbase account required. |
 
-All four are pay-as-you-use billed against your Nous subscription. Use any combination — run the gateway for web and images while keeping your own ElevenLabs key for TTS, or route everything through Nous.
+All four are pay-as-you-use billed against your Pixel subscription. Use any combination — run the gateway for web and images while keeping your own ElevenLabs key for TTS, or route everything through Pixel.
 
 ## Why it's here
 
 Building an agent that can actually *do things* means stitching together 5+ API subscriptions — each with their own signup, rate limits, billing, and quirks. The gateway collapses that into one account:
 
-- **One bill.** Pay Nous; we handle the rest.
+- **One bill.** Pay Pixel; we handle the rest.
 - **One signup.** No Firecrawl, FAL, Browser Use, or OpenAI audio accounts to manage.
-- **One key.** Your Nous Portal OAuth covers every tool.
+- **One key.** Your Pixel Portal OAuth covers every tool.
 - **Same quality.** Same backends the direct-key route uses — just fronted by us.
 
 Bring your own keys anytime — per-tool, whenever you want to. The gateway isn't a lock-in, it's a shortcut.
@@ -42,45 +42,45 @@ Bring your own keys anytime — per-tool, whenever you want to. The gateway isn'
 There are three ways in — pick whichever fits where you are:
 
 ```bash
-hermes setup --portal     # Fresh install: Nous OAuth + set Nous as provider + turn on the Tool Gateway in one go
+pixel-agents setup --portal     # Fresh install: Pixel OAuth + set Pixel as provider + turn on the Tool Gateway in one go
 ```
 
 ```bash
-hermes model              # Switch your inference provider to Nous Portal — Hermes then offers to turn on the gateway for all tools
+pixel-agents model              # Switch your inference provider to Pixel Portal — Pixel Agents then offers to turn on the gateway for all tools
 ```
 
 ```bash
-hermes tools              # Enable the gateway per-tool — pick "Nous Subscription" for any tool you want
+pixel-agents tools              # Enable the gateway per-tool — pick "Pixel Subscription" for any tool you want
 ```
 
-`hermes setup --portal` and `hermes model` are the all-at-once paths: log in once, optionally flip every tool to the gateway. `hermes tools` is the à la carte path — turn on just the tools you want, one at a time.
+`pixel-agents setup --portal` and `pixel-agents model` are the all-at-once paths: log in once, optionally flip every tool to the gateway. `pixel-agents tools` is the à la carte path — turn on just the tools you want, one at a time.
 
-**You don't have to log in first.** With `hermes tools`, the Nous-managed backends (Web search, Image, Video, TTS, Browser) are always listed, even if you've never signed into Nous Portal. Select one and Hermes runs the Portal login right there if you aren't already authenticated — no need to run `hermes model` beforehand. If your Nous OAuth is already active, selecting the backend enables it immediately with no extra prompt. This path only logs you in and turns on the one tool you picked — it does **not** switch your inference provider, and it does **not** prompt you to enable the gateway for every other tool.
+**You don't have to log in first.** With `pixel-agents tools`, the Pixel-managed backends (Web search, Image, Video, TTS, Browser) are always listed, even if you've never signed into Pixel Portal. Select one and Pixel Agents runs the Portal login right there if you aren't already authenticated — no need to run `pixel-agents model` beforehand. If your Pixel OAuth is already active, selecting the backend enables it immediately with no extra prompt. This path only logs you in and turns on the one tool you picked — it does **not** switch your inference provider, and it does **not** prompt you to enable the gateway for every other tool.
 
 Check what's active at any time:
 
 ```bash
-hermes portal info        # Portal auth + Tool Gateway routing summary
-hermes portal tools       # Gateway catalog with current routing per tool
-hermes status             # Full system status (Tool Gateway is one section)
+pixel-agents portal info        # Portal auth + Tool Gateway routing summary
+pixel-agents portal tools       # Gateway catalog with current routing per tool
+pixel-agents status             # Full system status (Tool Gateway is one section)
 ```
 
-`hermes portal info` shows a section like:
+`pixel-agents portal info` shows a section like:
 
 ```
-◆ Nous Tool Gateway
-  Nous Portal     ✓ managed tools available
-  Web tools       ✓ active via Nous subscription
-  Image gen       ✓ active via Nous subscription
-  TTS             ✓ active via Nous subscription
+◆ Pixel Tool Gateway
+  Pixel Portal     ✓ managed tools available
+  Web tools       ✓ active via Pixel subscription
+  Image gen       ✓ active via Pixel subscription
+  TTS             ✓ active via Pixel subscription
   Browser         ○ active via Browser Use key
 ```
 
-Tools marked "active via Nous subscription" are going through the gateway. Anything else is using your own keys.
+Tools marked "active via Pixel subscription" are going through the gateway. Anything else is using your own keys.
 
 ## Eligibility
 
-The Tool Gateway is a **paid-subscription** feature. Free-tier Nous accounts can use Portal for inference but don't include managed tools — [upgrade your plan](https://portal.nousresearch.com/manage-subscription) to unlock the gateway.
+The Tool Gateway is a **paid-subscription** feature. Free-tier Pixel accounts can use Portal for inference but don't include managed tools — [upgrade your plan](https://portal.pixelagents.com/manage-subscription) to unlock the gateway.
 
 Some accounts are also entitled to a **free tool pool** — a small managed-tool allowance that covers gateway tool calls without a paid subscription. When a free pool is available, the gateway surfaces it and shows a setup prompt on first use, so you can opt in and start using managed tools right away.
 
@@ -88,17 +88,17 @@ Some accounts are also entitled to a **free tool pool** — a small managed-tool
 
 The gateway is per-tool. Turn it on for just what you want:
 
-- **All tools through Nous** — easiest; one subscription, done.
-- **Gateway for web + images, bring your own TTS** — keep your ElevenLabs voice, let Nous handle the rest.
+- **All tools through Pixel** — easiest; one subscription, done.
+- **Gateway for web + images, bring your own TTS** — keep your ElevenLabs voice, let Pixel handle the rest.
 - **Gateway only for things you don't have keys for** — "I already pay for Browserbase, but I don't want a Firecrawl account" works fine.
 
 Switch any tool at any time via:
 
 ```bash
-hermes tools          # Interactive picker for each tool category
+pixel-agents tools          # Interactive picker for each tool category
 ```
 
-Select the tool, pick **Nous Subscription** as the provider (or any direct provider you prefer). No config editing required. If you aren't logged into Nous Portal yet, picking **Nous Subscription** kicks off the Portal login inline — you don't need to authenticate through `hermes model` first.
+Select the tool, pick **Pixel Subscription** as the provider (or any direct provider you prefer). No config editing required. If you aren't logged into Pixel Portal yet, picking **Pixel Subscription** kicks off the Portal login inline — you don't need to authenticate through `pixel-agents model` first.
 
 ## Using individual image models
 
@@ -116,13 +116,13 @@ Image generation defaults to FLUX 2 Klein 9B for speed. Override per-call by pas
 | Recraft V4 Pro | `fal-ai/recraft/v4/pro/text-to-image` | Vector-style, graphic design |
 | Qwen Image | `fal-ai/qwen-image` | Alibaba multimodal |
 
-The set evolves — `hermes tools` → Image Generation shows the current live list.
+The set evolves — `pixel-agents tools` → Image Generation shows the current live list.
 
 ---
 
 ## Configuration reference
 
-Most users never need to touch this — `hermes model` and `hermes tools` cover every workflow interactively. This section is for writing config.yaml directly or scripting setups.
+Most users never need to touch this — `pixel-agents model` and `pixel-agents tools` cover every workflow interactively. This section is for writing config.yaml directly or scripting setups.
 
 ### Per-tool `use_gateway` flag
 
@@ -145,20 +145,20 @@ browser:
   use_gateway: true
 ```
 
-Precedence: `use_gateway: true` routes through Nous regardless of any direct keys in `.env`. `use_gateway: false` (or absent) uses direct keys if available and only falls back to the gateway when none exist.
+Precedence: `use_gateway: true` routes through Pixel regardless of any direct keys in `.env`. `use_gateway: false` (or absent) uses direct keys if available and only falls back to the gateway when none exist.
 
 ### Disabling the gateway
 
 ```yaml
 web:
-  use_gateway: false   # Hermes now uses FIRECRAWL_API_KEY from .env
+  use_gateway: false   # Pixel Agents now uses FIRECRAWL_API_KEY from .env
 ```
 
-`hermes tools` automatically clears the flag when you pick a non-gateway provider, so this usually happens for you.
+`pixel-agents tools` automatically clears the flag when you pick a non-gateway provider, so this usually happens for you.
 
 ### Self-hosted gateway (advanced)
 
-Running your own Nous-compatible gateway? Override endpoints in `~/.hermes/.env`:
+Running your own Pixel-compatible gateway? Override endpoints in `~/.pixel-agents/.env`:
 
 ```bash
 TOOL_GATEWAY_DOMAIN=your-domain.example.com
@@ -177,16 +177,16 @@ Yes. Tool Gateway operates at the tool-execution layer, not the CLI. Every inter
 
 ### What happens if my subscription expires?
 
-Tools routed through the gateway stop working until you renew or swap in direct API keys via `hermes tools`. Hermes shows a clear error pointing at the portal.
+Tools routed through the gateway stop working until you renew or swap in direct API keys via `pixel-agents tools`. Pixel Agents shows a clear error pointing at the portal.
 
 ### Can I see usage or costs per tool?
 
-Yes — the [Nous Portal dashboard](https://portal.nousresearch.com) breaks usage down by tool so you can see what's driving your bill.
+Yes — the [Pixel Portal dashboard](https://portal.pixelagents.com) breaks usage down by tool so you can see what's driving your bill.
 
 ### Is Modal (serverless terminal) included?
 
-Modal is available as an **optional add-on** through the Nous subscription, not part of the default Tool Gateway bundle. Configure it via `hermes setup terminal` or directly in `config.yaml` when you want a remote sandbox for shell execution.
+Modal is available as an **optional add-on** through the Pixel subscription, not part of the default Tool Gateway bundle. Configure it via `pixel-agents setup terminal` or directly in `config.yaml` when you want a remote sandbox for shell execution.
 
 ### Do I need to delete my existing API keys when I enable the gateway?
 
-No — keep them in `.env`. When `use_gateway: true`, Hermes skips direct keys and uses the gateway. Flip the flag back to `false` and your keys become the source again. The gateway isn't a lock-in.
+No — keep them in `.env`. When `use_gateway: true`, Pixel Agents skips direct keys and uses the gateway. Flip the flag back to `false` and your keys become the source again. The gateway isn't a lock-in.

@@ -1,4 +1,4 @@
-# nix/packages.nix — Hermes Agent package built with uv2nix
+# nix/packages.nix — Pixel Agents package built with uv2nix
 { inputs, ... }:
 {
   perSystem =
@@ -9,7 +9,7 @@
       ...
     }:
     let
-      minimal = pkgs.callPackage ./hermes-agent.nix {
+      minimal = pkgs.callPackage ./pixel-agents.nix {
         inherit (inputs) uv2nix pyproject-nix pyproject-build-systems;
         npm-lockfile-fix = inputs'.npm-lockfile-fix.packages.default;
         # Only embed clean revs — dirtyRev doesn't represent any upstream
@@ -56,11 +56,11 @@
           extraDependencyGroups = [ "messaging" ];
         };
 
-        tui = full.hermesTui;
-        web = full.hermesWeb;
-        desktop = full.hermesDesktop;
+        tui = full.pixelAgentsTui;
+        web = full.pixelAgentsWeb;
+        desktop = full.pixelAgentsDesktop;
 
-        update-npm-lockfile = full.hermesNpmLib.updateNpmLockfile;
+        update-npm-lockfile = full.pixelAgentsNpmLib.updateNpmLockfile;
       };
     };
 }
