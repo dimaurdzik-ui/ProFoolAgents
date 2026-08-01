@@ -76,6 +76,8 @@ function streamGlyph(entry: SubagentStreamEntry): ReactNode {
   return <span aria-hidden className="mt-0.5 size-1 shrink-0 rounded-full bg-muted-foreground/55" />
 }
 
+import { $officeActiveTab } from '../../store/workers'
+
 interface AgentsViewProps {
   onClose: () => void
 }
@@ -83,7 +85,8 @@ interface AgentsViewProps {
 export function AgentsView({ onClose }: AgentsViewProps) {
   const { t } = useI18n()
   const subagentsBySession = useStore($subagentsBySession)
-  const [tab, setTab] = useState<OfficeTab>('live')
+  const tab = useStore($officeActiveTab)
+  const setTab = (newTab: OfficeTab) => $officeActiveTab.set(newTab)
 
   // Aggregate every session, matching the status-bar indicator — a subagent
   // running in a background session must still be visible here, or the two

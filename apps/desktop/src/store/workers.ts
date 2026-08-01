@@ -39,5 +39,9 @@ export interface WorkerTask {
 export const $workers = atom<WorkerLive[]>([])
 export const $workerTasks = atom<Record<string, WorkerTask[]>>({})
 
+// Persistent UI state for Office view
+export const $officeActiveTab = atom<'live' | 'staff' | 'review'>('live')
+export const $officeSelectedWorkerId = atom<string | null>(null)
+
 export const activeWorkers = (workers: WorkerLive[]) =>
   workers.filter(w => w.status === 'working')

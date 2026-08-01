@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import type { WorkerLive } from '../../store/workers'
 import { useI18n } from '../../i18n'
-import { Modal } from '../../components/ui/modal'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
@@ -46,57 +46,62 @@ export function AssignTaskModal({ worker, onClose, onSubmit }: AssignTaskModalPr
   }
 
   return (
-    <Modal title={t('agents.office.assignTask') || 'Assign Task'} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4 min-w-[400px]">
-        <div>
-          <label className="text-sm font-medium mb-1 block">
-            {t('agents.office.goal') || 'Goal'}
-          </label>
-          <Textarea 
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder={t('agents.office.goalPlaceholder') || 'What should this worker accomplish?'}
-            minRows={3}
-            required
-          />
-        </div>
-        
-        <div>
-          <label className="text-sm font-medium mb-1 block">
-            {t('agents.office.deliverable') || 'Expected deliverable'}
-          </label>
-          <Input 
-            value={deliverable}
-            onChange={(e) => setDeliverable(e.target.value)}
-            placeholder={t('agents.office.deliverablePlaceholder') || 'What artifact should be produced?'}
-          />
-        </div>
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="shadow-pixel border-[var(--stroke-pixel)] min-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>{t('agents.office.assignTask') || 'Assign Task'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-4">
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              {t('agents.office.goal') || 'Goal'}
+            </label>
+            <Textarea 
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder={t('agents.office.goalPlaceholder') || 'What should this worker accomplish?'}
+              minRows={3}
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              {t('agents.office.deliverable') || 'Expected deliverable'}
+            </label>
+            <Input 
+              value={deliverable}
+              onChange={(e) => setDeliverable(e.target.value)}
+              placeholder={t('agents.office.deliverablePlaceholder') || 'What artifact should be produced?'}
+            />
+          </div>
 
-        <div>
-          <label className="text-sm font-medium mb-1 block">
-            {t('agents.office.priority') || 'Priority'}
-          </label>
-          <select 
-            className="w-full bg-base-800 border border-base-700 rounded p-2"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as any)}
-          >
-            <option value="low">{t('agents.office.priorityLow') || 'Low'}</option>
-            <option value="normal">{t('agents.office.priorityNormal') || 'Normal'}</option>
-            <option value="high">{t('agents.office.priorityHigh') || 'High'}</option>
-            <option value="urgent">{t('agents.office.priorityUrgent') || 'Urgent'}</option>
-          </select>
-        </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              {t('agents.office.priority') || 'Priority'}
+            </label>
+            <select 
+              className="w-full bg-base-800 border border-base-700 rounded p-2"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as any)}
+            >
+              <option value="low">{t('agents.office.priorityLow') || 'Low'}</option>
+              <option value="normal">{t('agents.office.priorityNormal') || 'Normal'}</option>
+              <option value="high">{t('agents.office.priorityHigh') || 'High'}</option>
+              <option value="urgent">{t('agents.office.priorityUrgent') || 'Urgent'}</option>
+            </select>
+          </div>
 
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting || goal.length < 10}>
-            {isSubmitting ? 'Assigning...' : 'Assign'}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting || goal.length < 10}>
+              {isSubmitting ? 'Assigning...' : 'Assign'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

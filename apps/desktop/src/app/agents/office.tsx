@@ -1,5 +1,8 @@
 import { resolveGatewayWsUrl } from '@pixel-agents/shared'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useStore } from '@nanostores/react'
+import { $officeSelectedWorkerId } from '@/store/workers'
+import { Codicon } from '@/components/ui/codicon'
 
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { Button } from '@/components/ui/button'
@@ -66,6 +69,17 @@ function parseCriteria(value?: null | string): string[] {
   } catch {
     return [value]
   }
+}
+
+function getRoleIcon(templateId: string) {
+  const t = templateId.toLowerCase()
+  if (t.includes('develop') || t.includes('code')) return 'code'
+  if (t.includes('design') || t.includes('ui')) return 'paintcan'
+  if (t.includes('manage') || t.includes('pm')) return 'project'
+  if (t.includes('writ') || t.includes('copy')) return 'edit'
+  if (t.includes('research')) return 'search'
+  if (t.includes('data')) return 'database'
+  return 'person'
 }
 
 function useOfficeData(active: boolean) {
@@ -206,8 +220,14 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [archiveCandidate, setArchiveCandidate] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [selectedWorkerForDetail, setSelectedWorkerForDetail] = useState<Worker | null>(null)
+  
+  const selectedWorkerId = useStore($officeSelectedWorkerId)
+  const setSelectedWorkerForDetail = (worker: Worker | null) => $officeSelectedWorkerId.set(worker?.worker_id ?? null)
+  const selectedWorkerForDetail = selectedWorkerId ? office.data.workers.find(w => w.worker_id === selectedWorkerId) || null : null
+  
   const [selectedWorkerForTask, setSelectedWorkerForTask] = useState<Worker | null>(null)
+  
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const selectedTemplate = office.data.catalog.find(template => template.id === templateId)
 
@@ -281,6 +301,22 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
         </Button>
       </div>
 
+      <div className="flex items-center gap-2 border-t border-border/40 pt-3 mt-1">
+        <label className="text-[0.65rem] text-muted-foreground uppercase font-medium">Filter:</label>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger size="sm" className="w-[150px]">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="working">Working</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
+            <SelectItem value="idle">Idle</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {actionError ? <p className="shrink-0 text-xs text-destructive">{actionError}</p> : null}
 
       {office.data.workers.length === 0 ? (
@@ -293,7 +329,9 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="grid gap-2">
-            {office.data.workers.map(worker => {
+            {office.data.workers
+              .filter(w => statusFilter === 'all' || w.status === statusFilter)
+              .map(worker => {
               const busy = busyId === worker.worker_id
               const confirmingArchive = archiveCandidate === worker.worker_id
 
@@ -315,6 +353,7 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
                             : 'bg-emerald-500/80'
                     )}
                   />
+                  <Codicon name={getRoleIcon(worker.template_id)} className="text-muted-foreground/70" size={16} />
                   <div className="min-w-40 flex-1">
                     <p className="text-xs font-medium text-foreground/90">{worker.display_name}</p>
                     <p className="font-mono text-[0.65rem] text-muted-foreground/65">
@@ -465,10 +504,14 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
   const [feedback, setFeedback] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [priorityFilter, setPriorityFilter] = useState<string>('all')
 
   const pending = useMemo(
-    () => office.data.tasks.filter(task => task.status === 'waiting_approval' || task.status === 'waiting_tool_approval'),
-    [office.data.tasks]
+    () => office.data.tasks.filter(task => 
+      (task.status === 'waiting_approval' || task.status === 'waiting_tool_approval') &&
+      (priorityFilter === 'all' || task.priority === priorityFilter)
+    ),
+    [office.data.tasks, priorityFilter]
   )
 
   const review = async (task: WorkerTask, action: 'approve' | 'reject') => {
@@ -517,7 +560,24 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-      {actionError ? <p className="shrink-0 text-xs text-destructive">{actionError}</p> : null}
+      <div className="flex items-center justify-between shrink-0 mb-1">
+        {actionError ? <p className="text-xs text-destructive">{actionError}</p> : <div />}
+        <div className="flex items-center gap-2">
+          <label className="text-[0.65rem] text-muted-foreground uppercase font-medium">Priority:</label>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger size="sm" className="w-[120px]">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="grid gap-5">
           {pending.map(task => {
