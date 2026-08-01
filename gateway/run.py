@@ -25835,7 +25835,7 @@ async def tasks_create(params: dict) -> dict:
 @rpc_method("tasks.approve")
 async def tasks_approve(params: dict) -> dict:
     conn = connect()
-    update_task(conn, params["task_id"], "approved", status="done")
+    update_task(conn, params["task_id"], "status_change", status="done")
     return {"success": True}
 
 @rpc_method("tasks.reject")
@@ -25843,6 +25843,18 @@ async def tasks_reject(params: dict) -> dict:
     conn = connect()
     from pixel_cli.worker_runner import WorkerRunner
     WorkerRunner().reject_and_retry(params["task_id"], params.get("feedback", ""))
+    return {"success": True}
+
+@rpc_method("tasks.approve_tool")
+async def tasks_approve_tool(params: dict) -> dict:
+    conn = connect()
+    update_task(conn, params["task_id"], "status_change", status="working")
+    return {"success": True}
+
+@rpc_method("tasks.reject_tool")
+async def tasks_reject_tool(params: dict) -> dict:
+    conn = connect()
+    update_task(conn, params["task_id"], "status_change", status="rejected")
     return {"success": True}
 
 @rpc_method("agents.catalog")

@@ -52,9 +52,18 @@ def _init_schema(conn: sqlite3.Connection):
         max_retries          INTEGER NOT NULL DEFAULT 3,
         created_at           INTEGER NOT NULL,
         updated_at           INTEGER NOT NULL,
+        pending_tool_name    TEXT,
+        pending_tool_args    TEXT,
         FOREIGN KEY(worker_id) REFERENCES workers(worker_id)
     )
     """)
+    
+    # Simple migration for existing DBs
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN pending_tool_name TEXT")
+        cursor.execute("ALTER TABLE tasks ADD COLUMN pending_tool_args TEXT")
+    except sqlite3.OperationalError:
+        pass
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS task_events (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,

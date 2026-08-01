@@ -6,10 +6,17 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 
+export interface TaskDraft {
+  worker_id: string
+  goal: string
+  deliverable?: string
+  priority: 'normal' | 'high' | 'low' | 'urgent'
+}
+
 interface AssignTaskModalProps {
   worker: WorkerLive
   onClose: () => void
-  onSubmit: (task: any) => Promise<void>
+  onSubmit: (task: TaskDraft) => Promise<void>
 }
 
 export function AssignTaskModal({ worker, onClose, onSubmit }: AssignTaskModalProps) {

@@ -182,7 +182,30 @@ def _resolve_restart_drain_timeout() -> float:
     except ImportError:
         from gateway.restart import DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
         return DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+        return DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
 
+async def _worker_db_poller(app: "FastAPI"):
+    import asyncio
+    import json
+    from pixel_cli.worker_db import connect, tail_events
+    try:
+        conn = connect()
+    except Exception:
+        return
+        
+    cursor_id = 0
+    while True:
+        try:
+            events = tail_events(conn, cursor_id=cursor_id, limit=50)
+            if events:
+                for event in events:
+                    cursor_id = max(cursor_id, event['id'])
+                    await _broadcast_event(app, "workers", json.dumps(event))
+            await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            await asyncio.sleep(5)
 
 @asynccontextmanager
 async def _lifespan(app: "FastAPI"):
@@ -194,6 +217,8 @@ async def _lifespan(app: "FastAPI"):
     # On app.state (not a module global) so the Lock binds to the running
     # event loop during lifespan startup — see _get_event_state's docstring.
     app.state.chat_argv_lock = asyncio.Lock()
+    
+    worker_task = asyncio.create_task(_worker_db_poller(app))
 
     # Import pixel_cli.gateway eagerly *before* the lifespan yield so the
     # GIL-heavy .pyc compilation and Defender scan cost is absorbed during
@@ -241,6 +266,7 @@ async def _lifespan(app: "FastAPI"):
         pty_reaper_task.cancel()
         selftest_task.cancel()
         auto_archive_task.cancel()
+        worker_task.cancel()
         await PTY_REGISTRY.close_all()
         if cron_stop is not None:
             cron_stop.set()

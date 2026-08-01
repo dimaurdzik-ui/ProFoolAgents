@@ -42,10 +42,43 @@ class WorkerRunner:
         if task.get('acceptance_criteria'):
             user_message += f"\nAcceptance Criteria: {task['acceptance_criteria']}"
             
+        import json
+        import time
+        
+        def on_tool_start(tool_name, tool_args):
+            if worker['autonomy_mode'] != 'manual':
+                return
+            
+            update_task(
+                conn, task_id, 'status_change', 
+                status='waiting_tool_approval',
+                pending_tool_name=tool_name,
+                pending_tool_args=json.dumps(tool_args)
+            )
+            update_worker(conn, worker_id, status='idle')
+            
+            # Block until approved or rejected
+            while True:
+                time.sleep(1)
+                current = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                status = current['status']
+                
+                if status == 'working':
+                    # Approved
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None)
+                    update_worker(conn, worker_id, status='working')
+                    return
+                elif status == 'rejected':
+                    # Rejected
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, status='working')
+                    update_worker(conn, worker_id, status='working')
+                    raise Exception("Tool execution rejected by user.")
+                    
         # Run agent in thread since run_conversation is sync
         agent = AIAgent(
             session_id=f"worker-{worker_id}",
-            platform="worker"
+            platform="worker",
+            tool_start_callback=on_tool_start
         )
         
         try:
@@ -93,10 +126,38 @@ class WorkerRunner:
         update_task(conn, task_id, 'status_change', status='working', retry_count=retry_count)
         update_worker(conn, worker_id, status='working')
         
+        def on_tool_start_retry(tool_name, tool_args):
+            if worker['autonomy_mode'] != 'manual':
+                return
+            
+            update_task(
+                conn, task_id, 'status_change', 
+                status='waiting_tool_approval',
+                pending_tool_name=tool_name,
+                pending_tool_args=json.dumps(tool_args)
+            )
+            update_worker(conn, worker_id, status='idle')
+            
+            import time
+            while True:
+                time.sleep(1)
+                current = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                status = current['status']
+                
+                if status == 'working':
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None)
+                    update_worker(conn, worker_id, status='working')
+                    return
+                elif status == 'rejected':
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, status='working')
+                    update_worker(conn, worker_id, status='working')
+                    raise Exception("Tool execution rejected by user.")
+        
         # We just need to send the feedback as a new message to the existing session
         agent = AIAgent(
             session_id=f"worker-{worker_id}",
-            platform="worker"
+            platform="worker",
+            tool_start_callback=on_tool_start_retry
         )
         
         user_message = f"Your previous work was rejected. Feedback: {feedback}\nPlease fix it and try again."

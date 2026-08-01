@@ -1,3 +1,4 @@
+import { resolveGatewayWsUrl } from '@pixel-agents/shared'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
@@ -119,10 +120,46 @@ function useOfficeData(active: boolean) {
     }
 
     void refresh()
-    const interval = window.setInterval(() => void refresh(true), 4_000)
+    
+    let activeWs = true
+    let ws: WebSocket | null = null
+    let reconnectTimer: number | undefined
+    
+    const connectEvents = async () => {
+      const desktop = window.pixelAgentsDesktop
+      if (!desktop || !activeWs) return
+      
+      try {
+        const conn = await desktop.getConnection()
+        if (!activeWs) return
+        
+        const wsUrlStr = await resolveGatewayWsUrl(desktop, conn)
+        const wsUrl = new URL(wsUrlStr)
+        wsUrl.pathname = '/api/events'
+        wsUrl.searchParams.set('channel', 'workers')
+        
+        ws = new window.WebSocket(wsUrl.toString())
+        ws.onmessage = () => {
+          if (activeWs) void refresh(true)
+        }
+        ws.onclose = () => {
+          if (activeWs) {
+            reconnectTimer = window.setTimeout(connectEvents, 5000)
+          }
+        }
+      } catch (e) {
+        if (activeWs) {
+          reconnectTimer = window.setTimeout(connectEvents, 5000)
+        }
+      }
+    }
+    
+    void connectEvents()
 
     return () => {
-      window.clearInterval(interval)
+      activeWs = false
+      if (ws) ws.close()
+      if (reconnectTimer) window.clearTimeout(reconnectTimer)
       generation.current += 1
     }
   }, [active, refresh])
@@ -369,7 +406,7 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
       
       {selectedWorkerForTask && (
         <AssignTaskModal
-          worker={selectedWorkerForTask as any}
+          worker={selectedWorkerForTask as unknown as import('../../store/workers').WorkerLive}
           onClose={() => setSelectedWorkerForTask(null)}
           onSubmit={async (taskParams) => {
             await office.requestGateway('tasks.create', taskParams)
@@ -380,12 +417,12 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
       
       {selectedWorkerForDetail && (
         <WorkerDetailDrawer
-          worker={selectedWorkerForDetail as any}
-          tasks={office.data.tasks.filter(t => t.worker_id === selectedWorkerForDetail.worker_id) as any}
+          worker={selectedWorkerForDetail as unknown as import('../../store/workers').WorkerLive}
+          tasks={office.data.tasks.filter(t => t.worker_id === selectedWorkerForDetail.worker_id) as unknown as import('../../store/workers').WorkerTask[]}
           onClose={() => setSelectedWorkerForDetail(null)}
           onAssignTask={(w) => {
             setSelectedWorkerForDetail(null)
-            setSelectedWorkerForTask(w as any)
+            setSelectedWorkerForTask(w as unknown as Worker)
           }}
         />
       )}
@@ -430,7 +467,7 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const pending = useMemo(
-    () => office.data.tasks.filter(task => task.status === 'waiting_approval'),
+    () => office.data.tasks.filter(task => task.status === 'waiting_approval' || task.status === 'waiting_tool_approval'),
     [office.data.tasks]
   )
 
@@ -447,7 +484,14 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
     setActionError(null)
 
     try {
-      await office.requestGateway(action === 'approve' ? 'tasks.approve' : 'tasks.reject', {
+      let rpcMethod = ''
+      if (task.status === 'waiting_tool_approval') {
+        rpcMethod = action === 'approve' ? 'tasks.approve_tool' : 'tasks.reject_tool'
+      } else {
+        rpcMethod = action === 'approve' ? 'tasks.approve' : 'tasks.reject'
+      }
+      
+      await office.requestGateway(rpcMethod, {
         feedback: action === 'reject' ? note : undefined,
         task_id: task.id
       })
@@ -506,6 +550,16 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
                     <p className="max-h-48 overflow-y-auto whitespace-pre-wrap text-[0.72rem] leading-relaxed text-foreground/85">
                       {task.result}
                     </p>
+                  </div>
+                ) : null}
+                {task.status === 'waiting_tool_approval' && task.pending_tool_name ? (
+                  <div className="rounded-md border border-border/50 bg-secondary/20 p-2">
+                    <p className="text-[0.6rem] font-medium uppercase tracking-wide text-primary/80">
+                      Pending Action: {task.pending_tool_name}
+                    </p>
+                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[0.65rem] text-muted-foreground">
+                      {task.pending_tool_args || '{}'}
+                    </pre>
                   </div>
                 ) : null}
                 {criteria.length > 0 ? (
