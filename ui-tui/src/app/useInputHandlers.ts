@@ -1,5 +1,5 @@
-import { forceRedraw, useInput } from '@pixel-agents/ink'
 import { useStore } from '@nanostores/react'
+import { forceRedraw, useInput } from '@pixel-agents/ink'
 import { useEffect, useRef } from 'react'
 
 import { DASHBOARD_TUI_MODE } from '../config/env.js'
@@ -217,6 +217,10 @@ export function useInputHandlers(ctx: InputHandlerContext): InputHandlerResult {
 
     if (overlay.agents) {
       return patchOverlayState({ agents: false })
+    }
+
+    if (overlay.workers) {
+      return patchOverlayState({ workers: false })
     }
 
     if (overlay.journey) {

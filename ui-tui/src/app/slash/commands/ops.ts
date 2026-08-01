@@ -63,6 +63,21 @@ interface SkillsReloadResponse {
 
 export const opsCommands: SlashCommand[] = [
   {
+    aliases: ['office', 'staff'],
+    help: 'open the persistent AI staff directory and review inbox',
+    name: 'team',
+    run: (arg, ctx, cmd) => {
+      if (!arg.trim()) {
+        return patchOverlayState({ workers: true })
+      }
+
+      ctx.gateway.gw
+        .request<SlashExecResponse>('slash.exec', { command: cmd.slice(1), session_id: ctx.sid })
+        .then(result => ctx.transcript.sys(result?.output || '/team: no output'))
+        .catch(ctx.guardedErr)
+    }
+  },
+  {
     help: 'stop background processes',
     name: 'stop',
     run: (_arg, ctx) => {

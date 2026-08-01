@@ -10,7 +10,12 @@ def _(rid, params: dict) -> dict:
     from agent.agent_registry import TEAM_AGENT_ID, get_all_agent_templates
 
     catalog = [template for template in get_all_agent_templates() if template.id != TEAM_AGENT_ID]
-    return _ok(rid, {"catalog": [dataclasses.asdict(t) for t in catalog]})
+    catalog_dicts = []
+    for t in catalog:
+        t_dict = dataclasses.asdict(t)
+        t_dict.pop("system_prompt", None)
+        catalog_dicts.append(t_dict)
+    return _ok(rid, {"catalog": catalog_dicts})
 
 @method("agents.installed")
 def _(rid, params: dict) -> dict:

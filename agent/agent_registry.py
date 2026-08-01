@@ -22,6 +22,19 @@ class AgentTemplate:
     icon: Optional[str] = None
     default_provider: Optional[str] = None
     default_model: Optional[str] = None
+    localized_name: Optional[str] = None
+    mission: Optional[str] = None
+    responsibilities: Optional[List[str]] = None
+    inputs: Optional[List[str]] = None
+    outputs: Optional[List[str]] = None
+    workflow: Optional[List[str]] = None
+    quality_checks: Optional[List[str]] = None
+    success_metrics: Optional[List[Dict[str, str]]] = None
+    delegates_to: Optional[List[str]] = None
+    escalation_rules: Optional[List[str]] = None
+    anti_patterns: Optional[List[str]] = None
+    communication_style: Optional[str] = None
+    source_attribution: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -38,6 +51,19 @@ class AgentTemplate:
             "icon": self.icon,
             "default_provider": self.default_provider,
             "default_model": self.default_model,
+            "localized_name": self.localized_name,
+            "mission": self.mission,
+            "responsibilities": self.responsibilities,
+            "inputs": self.inputs,
+            "outputs": self.outputs,
+            "workflow": self.workflow,
+            "quality_checks": self.quality_checks,
+            "success_metrics": self.success_metrics,
+            "delegates_to": self.delegates_to,
+            "escalation_rules": self.escalation_rules,
+            "anti_patterns": self.anti_patterns,
+            "communication_style": self.communication_style,
+            "source_attribution": self.source_attribution,
         }
 
 class AgentRegistry:
@@ -53,15 +79,15 @@ class AgentRegistry:
 
     def reload(self):
         self._templates.clear()
-        
+
         # Determine the root directory of the project
         project_root = Path(__file__).parent.parent
         agents_dir = project_root / "config" / "agents"
-        
+
         if not agents_dir.exists():
             # Try to resolve relative to cwd
             agents_dir = Path(os.getcwd()) / "config" / "agents"
-            
+
         if not agents_dir.exists():
             logger.warning(f"Agents directory {agents_dir} not found. Agent catalog will be empty.")
             return
@@ -70,25 +96,25 @@ class AgentRegistry:
             try:
                 with open(yaml_file, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
-                
+
                 if not data or not isinstance(data, dict):
                     continue
 
                 agent_id = str(data.get("id", ""))
                 agent_name = str(data.get("name", ""))
-                
+
                 if not agent_id or not agent_name:
                     logger.warning(f"Agent template {yaml_file} is missing 'id' or 'name'. Skipping.")
                     continue
-                    
+
                 if "system_prompt" not in data or not isinstance(data["system_prompt"], str):
                     logger.warning(f"Agent template {yaml_file} is missing 'system_prompt' or has invalid type. Skipping.")
                     continue
-                    
+
                 if "category" not in data or not isinstance(data["category"], str):
                     logger.warning(f"Agent template {yaml_file} is missing 'category' or has invalid type. Skipping.")
                     continue
-                    
+
                 if "description" not in data or not isinstance(data["description"], str):
                     logger.warning(f"Agent template {yaml_file} is missing 'description' or has invalid type. Skipping.")
                     continue
@@ -96,16 +122,16 @@ class AgentRegistry:
                 if "prompt_version" not in data or not isinstance(data["prompt_version"], int):
                     logger.warning(f"Agent template {yaml_file} is missing 'prompt_version' or has invalid type. Skipping.")
                     continue
-                    
+
                 starter_prompts = data.get("starter_prompts", [])
                 if not isinstance(starter_prompts, list):
                     logger.warning(f"Agent template {yaml_file} has invalid 'starter_prompts' type. Skipping.")
                     continue
-                    
+
                 if agent_id in self._templates:
                     logger.warning(f"Agent ID '{agent_id}' from {yaml_file} is a duplicate. Skipping.")
                     continue
-                    
+
                 # Support enabled flag, defaulting to True
                 enabled = data.get("enabled", True)
                 if not isinstance(enabled, bool):
@@ -121,7 +147,7 @@ class AgentRegistry:
                 elif not isinstance(allowed_tools, list):
                     logger.warning(f"Agent template {yaml_file} has invalid 'allowed_tools' type. Skipping.")
                     continue
-                    
+
                 capabilities = data.get("capabilities", [])
                 if not isinstance(capabilities, list):
                     logger.warning(f"Agent template {yaml_file} has invalid 'capabilities' type. Skipping.")
@@ -140,7 +166,20 @@ class AgentRegistry:
                     enabled=True,
                     icon=data.get("icon"),
                     default_provider=data.get("default_provider"),
-                    default_model=data.get("default_model")
+                    default_model=data.get("default_model"),
+                    localized_name=data.get("localized_name"),
+                    mission=data.get("mission"),
+                    responsibilities=data.get("responsibilities"),
+                    inputs=data.get("inputs"),
+                    outputs=data.get("outputs"),
+                    workflow=data.get("workflow"),
+                    quality_checks=data.get("quality_checks"),
+                    success_metrics=data.get("success_metrics"),
+                    delegates_to=data.get("delegates_to"),
+                    escalation_rules=data.get("escalation_rules"),
+                    anti_patterns=data.get("anti_patterns"),
+                    communication_style=data.get("communication_style"),
+                    source_attribution=data.get("source_attribution")
                 )
                 self._templates[template.id] = template
                 logger.info(f"Loaded agent template: {template.id} (v{template.prompt_version})")
@@ -173,10 +212,14 @@ TEAM_AGENT_ID = "pixel-team"
 
 def build_team_directory(current_agent_id: str | None = None) -> str:
     """Return a compact, prompt-safe directory of available colleagues."""
+    from pixel_state import SessionDB
+    db = SessionDB()
+    installed = {a["template_id"] for a in db.list_installed_agents()}
+
     colleagues = [
         template
         for template in get_all_agent_templates()
-        if template.id != TEAM_AGENT_ID and template.id != current_agent_id
+        if template.id != TEAM_AGENT_ID and template.id != current_agent_id and template.id in installed
     ]
     if not colleagues:
         return ""

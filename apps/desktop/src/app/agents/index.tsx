@@ -6,6 +6,7 @@ import { ActivityTimerText } from '@/components/chat/activity-timer-text'
 import { Codicon } from '@/components/ui/codicon'
 import { FadeText } from '@/components/ui/fade-text'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { type Translations, useI18n } from '@/i18n'
 import { compactNumber } from '@/lib/format'
 import { AlertCircle, CheckCircle2 } from '@/lib/icons'
@@ -21,6 +22,8 @@ import {
 } from '@/store/subagents'
 
 import { Panel, PanelEmpty, PanelHeader } from '../overlays/panel'
+
+import { type OfficeTab, OfficeView } from './office'
 
 // Mirrors statusGlyph() in tool-fallback.tsx so subagent rows speak the
 // same visual vocabulary as the chat tool blocks.
@@ -80,21 +83,35 @@ interface AgentsViewProps {
 export function AgentsView({ onClose }: AgentsViewProps) {
   const { t } = useI18n()
   const subagentsBySession = useStore($subagentsBySession)
+  const [tab, setTab] = useState<OfficeTab>('live')
 
   // Aggregate every session, matching the status-bar indicator — a subagent
   // running in a background session must still be visible here, or the two
   // desync ("Agents N running" vs an empty tree).
   const tree = useMemo(() => buildSubagentTree(allSubagents(subagentsBySession)), [subagentsBySession])
 
+  const tabs = useMemo(
+    () => [
+      { id: 'live' as const, label: t.agents.office.live },
+      { id: 'staff' as const, label: t.agents.office.staff },
+      { id: 'review' as const, label: t.agents.office.review }
+    ],
+    [t.agents.office.live, t.agents.office.review, t.agents.office.staff]
+  )
+
   return (
     <Panel closeLabel={t.agents.close} onClose={onClose}>
-      {tree.length === 0 ? (
+      <PanelHeader
+        actions={<SegmentedControl onChange={setTab} options={tabs} value={tab} />}
+        subtitle={tab === 'live' ? t.agents.subtitle : t.agents.office.subtitle}
+        title={tab === 'live' ? t.agents.title : t.agents.office.title}
+      />
+      {tab === 'live' && tree.length === 0 ? (
         <PanelEmpty description={t.agents.emptyDesc} icon="hubot" title={t.agents.emptyTitle} />
+      ) : tab === 'live' ? (
+        <SubagentTree tree={tree} />
       ) : (
-        <>
-          <PanelHeader subtitle={t.agents.subtitle} title={t.agents.title} />
-          <SubagentTree tree={tree} />
-        </>
+        <OfficeView tab={tab} />
       )}
     </Panel>
   )

@@ -25772,5 +25772,83 @@ def _exit_after_graceful_shutdown(exit_code: int) -> None:
     os._exit(exit_code)
 
 
+# --- Workers RPC Methods ---
+_RPC_REGISTRY = {}
+
+def rpc_method(method_name: str):
+    def decorator(func):
+        _RPC_REGISTRY[method_name] = func
+        return func
+    return decorator
+
+from pixel_cli.worker_db import connect, hire_worker, list_workers, update_worker, archive_worker, create_task, list_tasks, update_task
+from pixel_cli.worker_catalog import load_catalog
+
+@rpc_method("workers.list")
+async def workers_list(params: dict) -> dict:
+    conn = connect()
+    return {"workers": list_workers(conn)}
+
+@rpc_method("workers.hire")
+async def workers_hire(params: dict) -> dict:
+    conn = connect()
+    worker = hire_worker(
+        conn,
+        params["worker_id"],
+        params["template_id"],
+        params["display_name"],
+        params.get("autonomy_mode", "smart"),
+        params.get("manager_id")
+    )
+    return {"worker": worker}
+
+@rpc_method("workers.update")
+async def workers_update(params: dict) -> dict:
+    conn = connect()
+    update_worker(conn, params["worker_id"], **params.get("updates", {}))
+    return {"success": True}
+
+@rpc_method("workers.archive")
+async def workers_archive(params: dict) -> dict:
+    conn = connect()
+    archive_worker(conn, params["worker_id"])
+    return {"success": True}
+
+@rpc_method("tasks.list")
+async def tasks_list(params: dict) -> dict:
+    conn = connect()
+    return {"tasks": list_tasks(conn, params.get("worker_id"), params.get("status"))}
+
+@rpc_method("tasks.create")
+async def tasks_create(params: dict) -> dict:
+    conn = connect()
+    import time
+    task_id = params.get("task_id", str(time.time()))
+    task = create_task(conn, task_id, params["worker_id"], params["goal"], **params)
+    
+    # Spawn worker
+    from pixel_cli.worker_runner import WorkerRunner
+    WorkerRunner().spawn(params["worker_id"], task_id)
+    
+    return {"task": task}
+
+@rpc_method("tasks.approve")
+async def tasks_approve(params: dict) -> dict:
+    conn = connect()
+    update_task(conn, params["task_id"], "approved", status="done")
+    return {"success": True}
+
+@rpc_method("tasks.reject")
+async def tasks_reject(params: dict) -> dict:
+    conn = connect()
+    from pixel_cli.worker_runner import WorkerRunner
+    WorkerRunner().reject_and_retry(params["task_id"], params.get("feedback", ""))
+    return {"success": True}
+
+@rpc_method("agents.catalog")
+async def agents_catalog(params: dict) -> dict:
+    templates = load_catalog()
+    return {"catalog": [t.to_dict() for t in templates]}
+
 if __name__ == "__main__":
     main()

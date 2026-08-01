@@ -102,7 +102,7 @@ def _ephemeral_child_sql(alias: str = "s") -> str:
     )
 
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 
 # FTS storage-layout version, tracked INDEPENDENTLY of SCHEMA_VERSION in the
@@ -252,6 +252,17 @@ CREATE TABLE IF NOT EXISTS installed_agents (
     is_active INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS workers (
+    worker_id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'onboarding',
+    autonomy_mode TEXT NOT NULL DEFAULT 'smart',
+    manager_id TEXT,
+    created_at REAL NOT NULL,
+    archived_at REAL
+);
+
 CREATE TABLE IF NOT EXISTS gateway_routing (
     scope TEXT NOT NULL DEFAULT '',
     session_key TEXT NOT NULL,
@@ -288,7 +299,39 @@ CREATE TABLE IF NOT EXISTS async_delegations (
     delivery_claimed_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS delegate_tasks (
+    id TEXT PRIMARY KEY,
+    parent_session_id TEXT NOT NULL REFERENCES sessions(id),
+    worker_role TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    status TEXT NOT NULL,
+    handoff_mode TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    worker_id TEXT REFERENCES workers(worker_id),
+    deliverable TEXT,
+    acceptance_criteria TEXT,
+    deadline REAL,
+    priority INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS delegate_task_attempts (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES delegate_tasks(id),
+    attempt_number INTEGER NOT NULL,
+    child_session_id TEXT REFERENCES sessions(id),
+    result TEXT,
+    acceptance_check TEXT,
+    review_feedback TEXT,
+    status TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_source ON sessions(source);
+CREATE INDEX IF NOT EXISTS idx_delegate_tasks_queue
+    ON delegate_tasks(status, priority DESC, created_at);
+CREATE INDEX IF NOT EXISTS idx_delegate_tasks_worker
+    ON delegate_tasks(worker_id, status);
 CREATE INDEX IF NOT EXISTS idx_sessions_source_id ON sessions(source, id);
 CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);

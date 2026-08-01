@@ -353,6 +353,22 @@ class SessionSchemaMixin:
         except sqlite3.OperationalError:
             pass
 
+        # ── Initialize base agents ──────────────────────────────────────
+        # Populate installed_agents with default agents if empty
+        try:
+            row = cursor.execute("SELECT COUNT(*) FROM installed_agents").fetchone()
+            if row and (row[0] if isinstance(row, tuple) else row["COUNT(*)"]) == 0:
+                base_agents = ["pixel-team", "developer", "project-manager", "research-business-analyst", "marketer", "data-analyst"]
+                import time
+                now = time.time()
+                for aid in base_agents:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO installed_agents (id, template_id, prompt_version, created_at, is_active) VALUES (?, ?, ?, ?, ?)",
+                        (aid, aid, 1, now, 1)
+                    )
+        except sqlite3.OperationalError:
+            pass
+
         fts5_available = self._sqlite_supports_fts5(cursor)
         fts_migrations_complete = True
         if not fts5_available:

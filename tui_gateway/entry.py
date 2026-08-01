@@ -429,6 +429,9 @@ def ensure_mcp_discovery_started() -> None:
 
 def main():
     _install_sidecar_publisher()
+    from agent.worker_supervisor import ensure_worker_supervisor_started
+
+    ensure_worker_supervisor_started()
 
     # MCP tool discovery — backgrounded so a slow or unreachable MCP server
     # can't freeze TUI startup (a dead stdio/http server burns 1+2+4s of

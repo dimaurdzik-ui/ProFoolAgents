@@ -2472,20 +2472,25 @@ def _ensure_session_db_row(session: dict) -> None:
     if parent_session_id:
         model_config["_branched_from"] = parent_session_id
     try:
-        db.create_session(
-            key,
-            source=_session_source(session),
-            model=row_model,
-            model_config=model_config or None,
-            parent_session_id=parent_session_id,
-            cwd=_persisted_session_cwd(session),
+        create_kwargs = {
+            "source": _session_source(session),
+            "model": row_model,
+            "model_config": model_config or None,
+            "parent_session_id": parent_session_id,
+            "cwd": _persisted_session_cwd(session),
             # Self-describing rows: aggregators that merge multiple profile DBs
             # into one list can't rely on which file a row came from alone. NULL
             # means the launch/default profile (matches run_agent's convention).
-            profile_name=Path(profile_home).name if profile_home else None,
-            agent_id=session.get("agent_id"),
-            agent_prompt_version=session.get("agent_prompt_version"),
-        )
+            "profile_name": Path(profile_home).name if profile_home else None,
+        }
+        # These columns are optional extensions. Omitting absent values keeps
+        # the persistence path compatible with lightweight/older DB adapters
+        # while real SessionDB instances still receive the worker identity.
+        if session.get("agent_id") is not None:
+            create_kwargs["agent_id"] = session["agent_id"]
+        if session.get("agent_prompt_version") is not None:
+            create_kwargs["agent_prompt_version"] = session["agent_prompt_version"]
+        db.create_session(key, **create_kwargs)
     except Exception:
         logger.debug("failed to persist desktop session row", exc_info=True)
     finally:
@@ -6046,7 +6051,10 @@ def _make_agent(
     agent_cfg = cfg.get("agent") or {}
     
     db = session_db if session_db is not None else _get_db()
-    session = db.get_session(session_id or key)
+    # Session persistence is deliberately best-effort: the gateway can run
+    # without state.db, so agent construction must not turn a degraded store
+    # into a fatal chat startup error.
+    session = db.get_session(session_id or key) if db is not None else None
     
     allowed_tools = None
     system_prompt_base = agent_cfg.get("system_prompt", "")
@@ -13412,6 +13420,7 @@ from . import (  # noqa: E402
     methods_session as _methods_session,
     methods_tools as _methods_tools,
     methods_agents as _methods_agents,
+    methods_workers as _methods_workers,
 )
 
 for _m in (
@@ -13421,6 +13430,7 @@ for _m in (
     _methods_complete,
     _methods_tools,
     _methods_agents,
+    _methods_workers,
 ):
     _m.register(sys.modules[__name__])
 del _m

@@ -1,8 +1,8 @@
 // Importing the apps barrel registers the reference widget apps at startup.
 import '../sdk/apps/index.js'
 
-import { AlternateScreen, Box, NoSelect, ScrollBox, Text } from '@pixel-agents/ink'
 import { useStore } from '@nanostores/react'
+import { AlternateScreen, Box, NoSelect, ScrollBox, Text } from '@pixel-agents/ink'
 import { Fragment, memo, useEffect, useMemo, useRef } from 'react'
 
 import { useGateway } from '../app/gatewayContext.js'
@@ -36,6 +36,7 @@ import { PetKitty, PetSprite } from './petSprite.js'
 import { QueuedMessages } from './queuedMessages.js'
 import { LiveTodoPanel, StreamingAssistant } from './streamingAssistant.js'
 import { TextInput, type TextInputMouseApi } from './textInput.js'
+import { WorkersOverlay } from './workers/WorkersOverlay.js'
 
 // Box geometry, kept here so the transcript's reservation math matches the
 // rendered overlay exactly.
@@ -473,6 +474,13 @@ const JourneyPane = memo(function JourneyPane() {
   return <Journey gw={gw} onClose={() => patchOverlayState({ journey: false })} t={ui.theme} />
 })
 
+const WorkersOverlayPane = memo(function WorkersOverlayPane() {
+  const { gw } = useGateway()
+  const ui = useStore($uiState)
+
+  return <WorkersOverlay gw={gw} onClose={() => patchOverlayState({ workers: false })} t={ui.theme} />
+})
+
 const StatusRulePane = memo(function StatusRulePane({
   at,
   composer,
@@ -534,8 +542,12 @@ export const AppLayout = memo(function AppLayout({
     <Shell {...shellProps}>
       <Box flexDirection="column" flexGrow={1} position="relative">
         <Box flexDirection="row" flexGrow={1}>
-          {!overlay.agents && !overlay.journey && <AmbientRail side="left" />}
-          {overlay.agents ? (
+          {!overlay.agents && !overlay.journey && !overlay.workers && <AmbientRail side="left" />}
+          {overlay.workers ? (
+            <PerfPane id="workers">
+              <WorkersOverlayPane />
+            </PerfPane>
+          ) : overlay.agents ? (
             <PerfPane id="agents">
               <AgentsOverlayPane />
             </PerfPane>
@@ -548,10 +560,10 @@ export const AppLayout = memo(function AppLayout({
               <TranscriptPane actions={actions} composer={composer} progress={progress} transcript={transcript} />
             </PerfPane>
           )}
-          {!overlay.agents && !overlay.journey && <AmbientRail side="right" />}
+          {!overlay.agents && !overlay.journey && !overlay.workers && <AmbientRail side="right" />}
         </Box>
 
-        {!overlay.agents && !overlay.journey && (
+        {!overlay.agents && !overlay.journey && !overlay.workers && (
           <>
             <PerfPane id="prompt">
               <PromptZone
@@ -575,7 +587,7 @@ export const AppLayout = memo(function AppLayout({
           </>
         )}
 
-        {!overlay.agents && <PetPane />}
+        {!overlay.agents && !overlay.workers && <PetPane />}
       </Box>
 
       <ActiveWidgetSlot />

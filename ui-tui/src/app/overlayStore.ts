@@ -20,7 +20,8 @@ const buildOverlayState = (): OverlayState => ({
   sessions: false,
   skillsHub: false,
   subscription: null,
-  sudo: null
+  sudo: null,
+  workers: false
 })
 
 export const $overlayState = atom<OverlayState>(buildOverlayState())
@@ -43,7 +44,8 @@ export const $isBlocked = computed(
     skillsHub,
     subscription,
     sudo,
-    widget
+    widget,
+    workers
   }) =>
     Boolean(
       agents ||
@@ -61,7 +63,8 @@ export const $isBlocked = computed(
       skillsHub ||
       subscription ||
       sudo ||
-      widget
+      widget ||
+      workers
     )
 )
 
@@ -93,5 +96,6 @@ export const resetFlowOverlays = () =>
     petPicker: $overlayState.get().petPicker,
     pluginsHub: $overlayState.get().pluginsHub,
     sessions: $overlayState.get().sessions,
-    skillsHub: $overlayState.get().skillsHub
+    skillsHub: $overlayState.get().skillsHub,
+    workers: $overlayState.get().workers
   })

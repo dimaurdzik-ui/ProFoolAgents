@@ -1000,6 +1000,38 @@ export interface Translations {
     durationSeconds: (seconds: string) => string
     durationMinutes: (minutes: number, seconds: number) => string
     tokens: (value: number | string) => string
+    office: {
+      title: string
+      subtitle: string
+      live: string
+      staff: string
+      review: string
+      loading: string
+      loadFailed: string
+      role: string
+      chooseRole: string
+      name: string
+      namePlaceholder: string
+      mode: string
+      manual: string
+      smart: string
+      autonomous: string
+      hire: string
+      noWorkers: string
+      noWorkersDesc: string
+      pause: string
+      resume: string
+      archive: string
+      archiveConfirm: string
+      inboxEmpty: string
+      inboxEmptyDesc: string
+      result: string
+      feedback: string
+      feedbackPlaceholder: string
+      feedbackRequired: string
+      reject: string
+      approve: string
+    }
   }
 
   commandCenter: {

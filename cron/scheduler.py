@@ -2876,6 +2876,53 @@ def run_job(
         )
         return True, doc, output, None
 
+    if job.get("worker_id"):
+        from pixel_state import SessionDB
+        import uuid
+
+        worker_id = job["worker_id"]
+        db = SessionDB()
+        worker = db.get_worker(worker_id)
+        if worker is None or worker.archived_at is not None:
+            message = f"Worker '{worker_id}' does not exist or is archived"
+            logger.error("Job '%s' (worker): %s", job_id, message)
+            return False, "", "", message
+
+        now_iso = _pixel_now().strftime("%Y-%m-%d %H:%M:%S")
+        parent_session_id = f"cron_{job_id}"
+        db.ensure_session(parent_session_id, source="cron")
+        def _insert(conn):
+            conn.execute(
+                "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid.uuid4()),
+                    parent_session_id,
+                    job.get("skill") or "cron_job",
+                    worker_id,
+                    job.get("prompt", ""),
+                    "queued",
+                    worker.autonomy_mode,
+                    time.time(),
+                    time.time()
+                )
+            )
+        db._execute_write(_insert)
+        from agent.worker_supervisor import ensure_worker_supervisor_started
+
+        ensure_worker_supervisor_started()
+
+        logger.info("Job '%s' (worker): enqueued to worker %s", job_id, worker_id)
+        silent_doc = (
+            f"# Cron Job: {job_name}\n\n"
+            f"**Job ID:** {job_id}\n"
+            f"**Run Time:** {now_iso}\n"
+            f"**Mode:** worker_queue\n"
+            f"**Worker:** {worker_id}\n"
+            f"**Status:** queued\n"
+        )
+        return True, silent_doc, "SILENT_MARKER", None
+
     # ---------------------------------------------------------------
     # Default (LLM) path — import and construct the agent machinery now
     # that we know we actually need it. Doing these imports here instead of
@@ -3506,7 +3553,7 @@ def run_job(
             session_id=_cron_session_id,
             session_db=_session_db,
         )
-        
+
         # Run the agent with an *inactivity*-based timeout: the job can run
         # for hours if it's actively calling tools / receiving stream tokens,
         # but a hung API call or stuck tool with no activity for the configured
@@ -3703,7 +3750,7 @@ def run_job(
         # Use a separate variable for log display; keep final_response clean
         # for delivery logic (empty response = no delivery).
         logged_response = final_response if final_response else "(No response generated)"
-        
+
         output = f"""# Cron Job: {job_name}
 
 **Job ID:** {job_id}
@@ -3718,14 +3765,14 @@ def run_job(
 
 {logged_response}
 """
-        
+
         logger.info("Job '%s' completed successfully", job_name)
         return True, output, final_response, None
-        
+
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
         logger.exception("Job '%s' failed: %s", job_name, error_msg)
-        
+
         output = f"""# Cron Job: {job_name} (FAILED)
 
 **Job ID:** {job_id}
@@ -4106,10 +4153,10 @@ def tick(
 ):
     """
     Check and run all due jobs.
-    
+
     Uses a file lock so only one tick runs at a time, even if the gateway's
     in-process ticker and a standalone daemon or manual tick overlap.
-    
+
     Args:
         verbose: Whether to print status messages
         adapters: Optional dict mapping Platform → live adapter (from gateway)

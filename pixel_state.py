@@ -70,6 +70,7 @@ from pixel_state_common import (  # noqa: F401  (re-exported for back-compat)
 from pixel_state_portability import SessionPortabilityMixin
 from pixel_state_schema import SessionSchemaMixin
 from pixel_state_search import SessionSearchMixin
+from pixel_state_workers import SessionWorkersMixin
 
 try:  # Hard dependency, but tolerate scaffold-phase imports before pip install.
     import psutil
@@ -1717,7 +1718,7 @@ def quarantine_zeroed_state_db(path: Path) -> Optional[Path]:
             handle.close()
 
 
-class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin):
+class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin, SessionWorkersMixin):
     """
     SQLite-backed session storage with FTS5 search.
 

@@ -460,6 +460,86 @@ def _looks_like_error_output(content: Any) -> bool:
     )
 
 
+def _delegated_result_status(
+    result: Dict[str, Any],
+    *,
+    summary: str,
+    interrupted: bool,
+    empty_sentinel: bool,
+) -> str:
+    """Map a child result to its truthful aggregate status.
+
+    Office failures often carry a useful human-readable error in
+    ``final_response``.  Text presence must never turn that error into a
+    successful delegation result.
+    """
+    office_status = result.get("office_task_status")
+    if interrupted:
+        return "interrupted"
+    if office_status == "waiting_approval":
+        return "waiting_approval"
+    if office_status == "error":
+        return "failed"
+    if summary and not empty_sentinel:
+        return "completed"
+    return "failed"
+
+
+def _verify_evidence(evidence: Any) -> List[str]:
+    errors = []
+    if not isinstance(evidence, dict):
+        return ["Evidence must be a JSON object."]
+
+    ev_type = evidence.get("type")
+    uri = evidence.get("uri")
+    value = evidence.get("value")
+
+    if ev_type == "artifact":
+        if not uri:
+            errors.append("Missing 'uri' for 'artifact' evidence.")
+        elif not os.path.exists(uri):
+            errors.append(f"Artifact file not found: {uri}")
+    elif ev_type == "artifact_section":
+        if not uri or not value:
+            errors.append("Missing 'uri' or 'value' for 'artifact_section' evidence.")
+        elif not os.path.exists(uri):
+            errors.append(f"Artifact file not found: {uri}")
+        else:
+            try:
+                with open(uri, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if str(value) not in content:
+                        errors.append(f"Section/value '{value}' not found in {uri}")
+            except Exception as e:
+                errors.append(f"Failed to read {uri}: {e}")
+    elif ev_type == "file_lines":
+        if not uri or not value:
+            errors.append("Missing 'uri' or 'value' for 'file_lines' evidence.")
+        elif not os.path.exists(uri):
+            errors.append(f"File not found: {uri}")
+        else:
+            try:
+                with open(uri, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    if str(value) not in content:
+                        errors.append(f"Line content '{value}' not found in {uri}")
+            except Exception as e:
+                errors.append(f"Failed to read {uri}: {e}")
+    elif ev_type == "test_result":
+        if not value:
+            errors.append("Missing 'value' for 'test_result' evidence.")
+    elif ev_type == "commit":
+        if not value:
+            errors.append("Missing 'value' for 'commit' evidence.")
+    elif ev_type == "url":
+        if not uri:
+            errors.append("Missing 'uri' for 'url' evidence.")
+    else:
+        errors.append(f"Unknown evidence type: {ev_type}. Valid types: artifact, artifact_section, file_lines, test_result, commit, url.")
+
+    return errors
+
+
 def _normalize_role(r: Optional[str]) -> str:
     """Normalise a caller-provided role to 'leaf' or 'orchestrator'.
 
@@ -1330,10 +1410,15 @@ def _build_child_agent(
         child_toolsets.append("delegation")
 
     worker_template = None
+    worker_instance = None
+    effective_acceptance_criteria = list(acceptance_criteria or [])
     if worker_id:
         from agent.agent_registry import TEAM_AGENT_ID, get_agent_template
+        from pixel_state import SessionDB
 
-        worker_template = get_agent_template(worker_id)
+        worker_instance = SessionDB().get_worker(str(worker_id))
+        template_id = worker_instance.template_id if worker_instance is not None else str(worker_id)
+        worker_template = get_agent_template(template_id)
         if worker_template is None or worker_template.id == TEAM_AGENT_ID:
             raise ValueError(f"Unknown professional worker: {worker_id}")
 
@@ -1352,9 +1437,41 @@ def _build_child_agent(
         contract_lines = []
         if deliverable:
             contract_lines.append(f"EXPECTED DELIVERABLE: {deliverable}")
-        if acceptance_criteria:
+
+        agent_qc = worker_template.quality_checks or []
+        agent_sm = worker_template.success_metrics or []
+
+        combined_criteria = list(effective_acceptance_criteria)
+        if agent_qc:
+            combined_criteria.extend([f"[PROFESSIONAL STANDARD] {qc}" for qc in agent_qc])
+        if agent_sm:
+            combined_criteria.extend([f"[METRIC] {sm}" for sm in agent_sm])
+        effective_acceptance_criteria = combined_criteria
+
+        if combined_criteria:
             contract_lines.append(
-                "ACCEPTANCE CRITERIA:\n" + "\n".join(f"- {item}" for item in acceptance_criteria)
+                "ACCEPTANCE CRITERIA:\n" + "\n".join(f"- {item}" for item in combined_criteria)
+            )
+            contract_lines.append(
+                "\nCRITICAL REQUIREMENT: You MUST include an `acceptance_check` JSON block in your final summary to prove you met the criteria.\n"
+                "Format it EXACTLY like this:\n"
+                "```json\n"
+                "{\n"
+                '  "acceptance_check": [\n'
+                '    {\n'
+                '      "criterion": "text of the criterion",\n'
+                '      "passed": true,\n'
+                '      "evidence": {\n'
+                '        "type": "artifact_section",\n'
+                '        "uri": "path/to/file.md",\n'
+                '        "value": "Section title or lines"\n'
+                '      }\n'
+                '    }\n'
+                "  ]\n"
+                "}\n"
+                "```\n"
+                "Valid evidence types are: 'artifact' (requires uri), 'artifact_section' (requires uri, value), 'file_lines' (requires uri, value), 'test_result' (requires value), 'commit' (requires value), 'url' (requires uri).\n"
+                "If you fail to provide this block, or if any criterion is not met, your submission will be rejected and sent back to you."
             )
         child_prompt = (
             f"{child_prompt}\n\n[ASSIGNED PROFESSIONAL WORKER: {worker_template.name}]\n"
@@ -1385,7 +1502,7 @@ def _build_child_agent(
         model=effective_model_for_cb,
         toolsets=child_toolsets,
         session_ref=child_session_ref,
-        worker_id=worker_template.id if worker_template is not None else None,
+        worker_id=worker_instance.worker_id if worker_instance is not None else None,
         worker_name=worker_template.name if worker_template is not None else None,
         deliverable=deliverable,
         acceptance_criteria=acceptance_criteria,
@@ -1609,10 +1726,12 @@ def _build_child_agent(
     child._subagent_id = subagent_id
     child._parent_subagent_id = parent_subagent_id
     child._subagent_goal = goal
-    child._worker_id = worker_template.id if worker_template is not None else None
+    child._worker_id = worker_instance.worker_id if worker_instance is not None else None
+    child._worker_template_id = worker_template.id if worker_template is not None else None
     child._worker_name = worker_template.name if worker_template is not None else None
+    child._handoff_mode = worker_instance.autonomy_mode if worker_instance is not None else "smart"
     child._task_deliverable = deliverable
-    child._task_acceptance_criteria = list(acceptance_criteria or [])
+    child._task_acceptance_criteria = effective_acceptance_criteria
     child._parent_turn_id = getattr(parent_agent, "_current_turn_id", "") or ""
     # Stable sidebar marker: delegate subagent sessions must stay out of
     # session pickers even when a parent delete orphans them (parent_session_id
@@ -2238,13 +2357,178 @@ def _run_single_child(
         def _run_with_thread_capture():
             _worker_thread_holder["t"] = threading.current_thread()
             from agent.delegation_context import delegated_child_context
+            import re
+            import json
 
             with delegated_child_context():
-                return child.run_conversation(
-                    user_message=goal,
-                    task_id=child_task_id,
-                    stream_callback=_relay_child_text,
-                )
+                worker_id = getattr(child, "_worker_id", None)
+                if not isinstance(worker_id, str) or not worker_id.strip():
+                    worker_id = None
+                if worker_id:
+                    import time
+                    from pixel_state import SessionDB
+
+                    db = SessionDB()
+                    now = time.time()
+                    t_parent_session_id = getattr(parent_agent, "session_id", "unknown")
+                    handoff = getattr(child, "_handoff_mode", "smart")
+                    deliverable = getattr(child, "_task_deliverable", None)
+                    criteria_json = json.dumps(
+                        list(getattr(child, "_task_acceptance_criteria", []) or []),
+                        ensure_ascii=False,
+                    )
+                    db.ensure_session(t_parent_session_id, source=getattr(parent_agent, "platform", None) or "delegation")
+
+                    def _insert(conn):
+                        conn.execute(
+                            "INSERT INTO delegate_tasks "
+                            "(id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, "
+                            "deliverable, acceptance_criteria, created_at, updated_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (
+                                child_task_id,
+                                t_parent_session_id,
+                                getattr(child, "_delegate_role", "unknown"),
+                                worker_id,
+                                goal,
+                                "queued",
+                                handoff,
+                                deliverable,
+                                criteria_json,
+                                now,
+                                now,
+                            ),
+                        )
+                    db._execute_write(_insert)
+                    from agent.worker_supervisor import ensure_worker_supervisor_started
+
+                    ensure_worker_supervisor_started()
+
+                    while True:
+                        with db._read_ctx() as conn:
+                            row = conn.execute("SELECT status, handoff_mode FROM delegate_tasks WHERE id = ?", (child_task_id,)).fetchone()
+
+                        if not row:
+                            break
+
+                        status = row["status"]
+                        # If a task enters waiting_approval, we yield control back immediately
+                        if status in ("completed", "error", "waiting_approval"):
+                            with db._read_ctx() as conn:
+                                attempt = conn.execute(
+                                    "SELECT a.result, a.acceptance_check, "
+                                    "a.child_session_id, s.model, "
+                                    "s.billing_provider AS provider "
+                                    "FROM delegate_task_attempts a "
+                                    "LEFT JOIN sessions s ON s.id = a.child_session_id "
+                                    "WHERE a.task_id = ? "
+                                    "ORDER BY a.created_at DESC LIMIT 1",
+                                    (child_task_id,)
+                                ).fetchone()
+
+                            res = {
+                                "completed": status != "error",
+                                "interrupted": False,
+                                "final_response": attempt["result"] if attempt else f"Task handled by worker {worker_id}",
+                                "acceptance_check_json": attempt["acceptance_check"] if attempt else None,
+                                "office_task_queued": True,
+                                "office_task_status": status,
+                                "execution": {
+                                    "kind": "office_worker",
+                                    "worker_id": worker_id,
+                                    "worker_name": getattr(child, "_worker_name", None),
+                                    "child_session_id": (
+                                        attempt["child_session_id"]
+                                        if attempt and attempt["child_session_id"]
+                                        else f"office-{worker_id}"
+                                    ),
+                                    "provider": attempt["provider"] if attempt else None,
+                                    "model": attempt["model"] if attempt else None,
+                                },
+                            }
+                            if status == "error":
+                                res["error"] = (
+                                    "The assigned office worker failed. The parent agent did "
+                                    "not execute this task and must not claim the worker's "
+                                    "deliverable as completed."
+                                )
+                            elif status == "waiting_approval":
+                                res["final_response"] += f"\n\n[TASK PENDING APPROVAL IN QUEUE: {child_task_id}]"
+                            return res
+
+                        time.sleep(2.0)
+
+                max_retries = 3
+                current_retry = 0
+                current_goal = goal
+
+                while current_retry < max_retries:
+                    result = child.run_conversation(
+                        user_message=current_goal,
+                        task_id=child_task_id,
+                        stream_callback=_relay_child_text,
+                    )
+
+                    completed = result.get("completed", False)
+                    interrupted = result.get("interrupted", False)
+                    summary = result.get("final_response") or ""
+
+                    _empty_sentinel = summary.strip() == "(empty)"
+
+                    if interrupted or not completed or _empty_sentinel:
+                        return result
+
+                    criteria = getattr(child, "_task_acceptance_criteria", [])
+                    if not criteria:
+                        return result
+
+                    json_str = ""
+                    match = re.search(r"```json\s*(.*?)\s*```", summary, re.DOTALL)
+                    if match:
+                        json_str = match.group(1)
+                    else:
+                        match = re.search(r"(\{.*\"acceptance_check\".*\})", summary, re.DOTALL)
+                        if match:
+                            json_str = match.group(1)
+
+                    feedback = []
+                    if not json_str:
+                        feedback.append("You failed to provide the required `acceptance_check` JSON block.")
+                    else:
+                        try:
+                            parsed = json.loads(json_str)
+                            checks = parsed.get("acceptance_check", [])
+                            if not isinstance(checks, list) or len(checks) == 0:
+                                feedback.append("The `acceptance_check` array is missing or empty.")
+                            else:
+                                for check in checks:
+                                    if not check.get("passed"):
+                                        feedback.append(f"Criterion failed: {check.get('criterion')}")
+                                    if not check.get("evidence"):
+                                        feedback.append(f"Missing evidence for criterion: {check.get('criterion')}")
+                                    else:
+                                        ev_errors = _verify_evidence(check.get("evidence"))
+                                        if ev_errors:
+                                            feedback.extend([f"Evidence error for criterion '{check.get('criterion')}': {err}" for err in ev_errors])
+                        except Exception as e:
+                            feedback.append(f"Failed to parse `acceptance_check` JSON: {e}")
+
+                    if not feedback:
+                        result["acceptance_check_json"] = json_str
+                        return result
+
+                    current_retry += 1
+                    if current_retry >= max_retries:
+                        result["error"] = "Max reviewer retries reached. " + " ".join(feedback)
+                        result["completed"] = False
+                        return result
+
+                    current_goal = "REVIEWER FEEDBACK: Your submission was rejected for the following reasons:\n"
+                    for f in feedback:
+                        current_goal += f"- {f}\n"
+                    current_goal += "\nPlease fix these issues and resubmit your final summary with the corrected `acceptance_check` block."
+
+                return result
 
         _child_context = contextvars.copy_context()
         _child_future = _timeout_executor.submit(
@@ -2382,15 +2666,12 @@ def _run_single_child(
         # it instead of silently accepting zero-content "success".
         _empty_sentinel = summary.strip() == "(empty)"
 
-        if interrupted:
-            status = "interrupted"
-        elif summary and not _empty_sentinel:
-            # A summary means the subagent produced usable output.
-            # exit_reason ("completed" vs "max_iterations") already
-            # tells the parent *how* the task ended.
-            status = "completed"
-        else:
-            status = "failed"
+        status = _delegated_result_status(
+            result,
+            summary=summary,
+            interrupted=interrupted,
+            empty_sentinel=_empty_sentinel,
+        )
 
         # Build tool trace from conversation messages (already in memory).
         # Uses tool_call_id to correctly pair parallel tool calls with results.
@@ -2460,6 +2741,9 @@ def _run_single_child(
                 ),
             },
             "tool_trace": tool_trace,
+            "office_task_queued": bool(result.get("office_task_queued")),
+            "office_task_status": result.get("office_task_status"),
+            "execution": result.get("execution"),
             # Captured before the finally block calls child.close() so the
             # parent thread can fire subagent_stop with the correct role.
             # Stripped before the dict is serialised back to the model.
@@ -2480,6 +2764,8 @@ def _run_single_child(
         }
         if status == "failed":
             entry["error"] = result.get("error", "Subagent did not produce a response.")
+            if result.get("office_task_queued"):
+                entry["parent_fallback_allowed"] = False
 
         # Cross-agent file-state reminder.  If this subagent wrote any
         # files the parent had already read, surface it so the parent
@@ -2574,6 +2860,42 @@ def _run_single_child(
                 child_progress_cb("subagent.complete", **complete_kwargs)
             except Exception as e:
                 logger.debug("Progress callback completion failed: %s", e)
+
+        cfg = _load_config()
+        handoff_approval_mode = cfg.get("handoff_approval_mode", "smart")
+
+        if (
+            status == "completed"
+            and handoff_approval_mode == "manual"
+            and not result.get("office_task_queued")
+        ):
+            entry["status"] = "waiting_approval"
+            try:
+                from pixel_state import SessionDB
+                import uuid
+                db = SessionDB()
+                now = time.time()
+                t_parent_session_id = getattr(parent_agent, "session_id", "unknown")
+
+                def _insert(conn):
+                    conn.execute(
+                        """
+                        INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (child_task_id, t_parent_session_id, getattr(child, "_delegate_role", "unknown"), getattr(child, "_worker_id", None), goal, "waiting_approval", handoff_approval_mode, now, now)
+                    )
+                    attempt_id = str(uuid.uuid4())
+                    conn.execute(
+                        """
+                        INSERT INTO delegate_task_attempts (id, task_id, attempt_number, child_session_id, result, acceptance_check, review_feedback, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (attempt_id, child_task_id, 1, getattr(child, "session_id", None), summary, result.get("acceptance_check_json"), None, "waiting_approval", now)
+                    )
+                db._execute_write(_insert)
+            except Exception as e:
+                logger.error("Failed to save delegate task to SQLite: %s", e)
 
         return entry
 
@@ -2885,6 +3207,10 @@ def delegate_task(
     # they run.
     background = is_truthy_value(background, default=False) if background is not None else False
 
+    cfg = _load_config()
+    if cfg.get("handoff_approval_mode", "smart") == "manual":
+        background = True
+
     # Depth limit — configurable via delegation.max_spawn_depth,
     # default 2 for parity with the original MAX_DEPTH constant.
     depth = getattr(parent_agent, "_delegate_depth", 0)
@@ -2974,12 +3300,6 @@ def delegate_task(
             return tool_error(
                 f"Task {i} from Команда Pixel Agents must name a professional worker_id."
             )
-        if worker_id:
-            from agent.agent_registry import TEAM_AGENT_ID, get_agent_template
-
-            template = get_agent_template(str(worker_id))
-            if template is None or template.id == TEAM_AGENT_ID:
-                return tool_error(f"Task {i} names an unknown professional worker: {worker_id}.")
         criteria = task.get("acceptance_criteria")
         if is_pixel_team and not isinstance(task.get("deliverable"), str):
             return tool_error(
@@ -2990,9 +3310,45 @@ def delegate_task(
                 f"Task {i} from Команда Pixel Agents must include acceptance_criteria."
             )
         if criteria is not None and (
-            not isinstance(criteria, list) or not all(isinstance(item, str) and item.strip() for item in criteria)
+            not isinstance(criteria, list)
+            or not all(isinstance(item, str) and item.strip() for item in criteria)
         ):
-            return tool_error(f"Task {i} has invalid acceptance_criteria; expected an array of non-empty strings.")
+            return tool_error(
+                f"Task {i} has invalid acceptance_criteria; expected an array of non-empty strings."
+            )
+        if worker_id:
+            from agent.agent_registry import TEAM_AGENT_ID, get_agent_template
+            from pixel_state import SessionDB
+            import uuid
+
+            db = SessionDB()
+            worker = db.get_worker(str(worker_id))
+            template = None
+            if worker:
+                template = get_agent_template(worker.template_id)
+            else:
+                template = get_agent_template(str(worker_id))
+                if template and template.id != TEAM_AGENT_ID:
+                    worker = db.find_worker_by_template(template.id)
+                    if worker is None:
+                        # First use of a profession creates one persistent staff member.
+                        new_id = "worker-" + uuid.uuid4().hex[:8]
+                        display_name = f"{template.name} {new_id[-4:]}"
+                        autonomy_mode = cfg.get("handoff_approval_mode", "smart")
+                        if autonomy_mode not in {"manual", "smart", "autonomous"}:
+                            autonomy_mode = "smart"
+                        worker = db.hire_worker(
+                            new_id,
+                            template.id,
+                            display_name,
+                            autonomy_mode=autonomy_mode,
+                        )
+                        db.update_worker(new_id, {"status": "idle"})
+                    task["worker_id"] = worker.worker_id
+                    worker_id = worker.worker_id
+
+            if template is None or template.id == TEAM_AGENT_ID:
+                return tool_error(f"Task {i} names an unknown professional worker or template: {worker_id}.")
 
     overall_start = time.monotonic()
     results = []
@@ -3218,6 +3574,32 @@ def delegate_task(
             # Sort by task_index so results match input order
             results.sort(key=lambda r: r["task_index"])
 
+            # Handoff Approval
+            from tools.approval import request_elicitation_consent, _get_approval_mode
+            approval_mode = _get_approval_mode()
+            if approval_mode == "manual":
+                for entry in results:
+                    if entry.get("status") == "completed" and not entry.get("office_task_queued"):
+                        idx = entry.get("task_index", 0)
+                        if n_tasks == 1:
+                            child_agent = children[0][2]
+                        else:
+                            child_agent = _child_by_index.get(idx)
+
+                        worker_name = getattr(child_agent, "_worker_name", None) or f"Subagent {idx}"
+                        summary = entry.get("summary", "")
+
+                        desc = f"Handoff approval for {worker_name}"
+                        msg = f"{worker_name} finished its task.\nApprove this deliverable to continue the workflow?\n\nSummary snippet:\n{summary[:1000]}..."
+
+                        consent = request_elicitation_consent(msg, desc)
+                        if consent == "decline":
+                            entry["status"] = "failed"
+                            entry["error"] = "Handoff rejected by user."
+                        elif consent == "cancel":
+                            entry["status"] = "interrupted"
+                            entry["error"] = "Handoff cancelled by user."
+
         # Cap subagent summaries against the parent's remaining context
         # headroom (split across the batch) before they enter the parent's
         # conversation. Full text is spilled to disk so nothing is lost.
@@ -3439,6 +3821,11 @@ def delegate_task(
 
         if dispatch.get("status") == "dispatched":
             n = len(_goals)
+            office_worker_ids = [
+                str(task.get("worker_id"))
+                for task in task_list
+                if task.get("worker_id")
+            ]
             note = (
                 "Subagent is running in the background. You and the user can "
                 "keep working; its full result re-enters the conversation as a "
@@ -3451,6 +3838,14 @@ def delegate_task(
                 f"single message once ALL of them finish. Do not wait or poll "
                 f"— just continue."
             )
+            if office_worker_ids:
+                note += (
+                    " The assigned office worker(s) exclusively own these "
+                    "goals. Do not duplicate or complete their assigned work "
+                    "in the parent agent. If a worker fails, report that "
+                    "failure and retry the worker only after its runtime is "
+                    "fixed."
+                )
             payload = {
                 "status": "dispatched",
                 "mode": "background",
@@ -3459,6 +3854,12 @@ def delegate_task(
                 "goals": _goals,
                 "note": note,
             }
+            if office_worker_ids:
+                payload["execution_policy"] = {
+                    "executor": "office_worker",
+                    "worker_ids": office_worker_ids,
+                    "parent_fallback_allowed": False,
+                }
             if live_paths:
                 payload["live_transcripts"] = list(live_paths)
                 payload["live_transcripts_hint"] = (
@@ -3845,6 +4246,10 @@ def _build_top_level_description() -> str:
         "subagent to return a verifiable handle (URL, ID, absolute path, HTTP "
         "status) and verify it yourself — fetch the URL, stat the file, read "
         "back the content — before telling the user the operation succeeded.\n"
+        "- When a task names a professional worker_id, that office worker is "
+        "the only executor. If its result has status failed/error and "
+        "parent_fallback_allowed=false, report the failure honestly; do not "
+        "redo the assigned task yourself or claim that the worker completed it.\n"
         "- Leaf subagents (role='leaf', the default) CANNOT call: "
         "delegate_task, clarify, memory, send_message.\n"
         "- Orchestrator subagents (role='orchestrator') retain "

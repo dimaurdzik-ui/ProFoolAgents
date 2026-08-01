@@ -301,6 +301,7 @@ export interface OverlayState {
   skillsHub: boolean
   subscription: SubscriptionOverlayState | null
   sudo: null | SudoReq
+  workers: boolean
 }
 
 export interface PagerState {

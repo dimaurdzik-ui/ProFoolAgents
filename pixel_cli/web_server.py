@@ -202,6 +202,12 @@ async def _lifespan(app: "FastAPI"):
     # run_in_executor still froze the event loop for 15-22 s, causing the
     # Desktop's 10-second WebSocket ready-probe to time out (GH-73083).
     _warm_gateway_module()
+    from agent.worker_supervisor import (
+        ensure_worker_supervisor_started,
+        stop_worker_supervisor,
+    )
+
+    ensure_worker_supervisor_started()
 
     # Desktop-spawned backends (PIXEL_AGENTS_DESKTOP=1) fire cron jobs themselves,
     # since the app has no gateway running the scheduler. Server `pixel-agents
@@ -238,6 +244,7 @@ async def _lifespan(app: "FastAPI"):
         await PTY_REGISTRY.close_all()
         if cron_stop is not None:
             cron_stop.set()
+        stop_worker_supervisor()
 
 
 def _get_event_state(app: "FastAPI"):
@@ -934,6 +941,11 @@ _SCHEMA_OVERRIDES: Dict[str, Dict[str, Any]] = {
         "type": "select",
         "description": "Dangerous command approval mode",
         "options": ["manual", "smart", "off"],
+    },
+    "handoff_approval_mode": {
+        "type": "select",
+        "description": "Review mode for AI office worker deliverables",
+        "options": ["manual", "smart", "autonomous"],
     },
     "context.engine": {
         "type": "select",

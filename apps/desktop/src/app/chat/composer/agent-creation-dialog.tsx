@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,19 +34,53 @@ export function AgentCreationDialog({
     onOpenChange(false)
   }
 
+  const [search, setSearch] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('Усі')
+
+  const categories = ['Усі', ...new Set(catalog.map(a => a.category))]
+
+  const filteredCatalog = catalog.filter(agent => {
+    const matchesSearch = agent.name.toLowerCase().includes(search.toLowerCase()) ||
+                          agent.description.toLowerCase().includes(search.toLowerCase())
+    const matchesCategory = selectedCategory === 'Усі' || agent.category === selectedCategory
+    return matchesSearch && matchesCategory
+  })
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-xl gap-5 max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-3xl gap-5 max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle icon={Users}>Каталог професійних агентів</DialogTitle>
           <DialogDescription>
             Оберіть помічника зі спеціалізованими інструментами та інструкціями для вашого завдання.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="flex-1 overflow-y-auto grid gap-3 pr-2">
-          {catalog.map(agent => (
-            <div className="flex items-center justify-between p-3 border rounded-lg hover:border-primary/50 transition-colors" key={agent.id}>
+
+        <div className="flex gap-4 items-center">
+          <input
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Пошук працівників..."
+            value={search}
+          />
+          <div className="flex gap-2 overflow-x-auto shrink-0 hide-scrollbar pb-1">
+            {categories.map(cat => (
+              <Button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                size="sm"
+                variant={selectedCategory === cat ? 'default' : 'outline'}
+                className="rounded-full text-xs"
+              >
+                {cat}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto grid md:grid-cols-2 gap-3 pr-2">
+          {filteredCatalog.map(agent => (
+            <div className="flex items-start justify-between p-3 border rounded-lg hover:border-primary/50 transition-colors" key={agent.id}>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{agent.name}</span>
@@ -56,7 +91,7 @@ export function AgentCreationDialog({
                 <span className="text-sm text-muted-foreground leading-snug">
                   {agent.description}
                 </span>
-                
+
                 {agent.capabilities && agent.capabilities.length > 0 && (
                   <div className="mt-2 text-xs">
                     <div className="flex items-center gap-1.5 text-foreground/80 font-medium mb-1">
@@ -69,7 +104,7 @@ export function AgentCreationDialog({
                     </ul>
                   </div>
                 )}
-                
+
                 {agent.allowed_tools && agent.allowed_tools.length > 0 && (
                   <div className="mt-2 text-xs">
                     <div className="flex items-center gap-1.5 text-foreground/80 font-medium mb-1">
@@ -85,7 +120,7 @@ export function AgentCreationDialog({
                   </div>
                 )}
               </div>
-              
+
               <div className="pl-4 shrink-0">
                 {installed.includes(agent.id) ? (
                   <Button className="gap-1.5 w-24" disabled size="sm" variant="outline">
