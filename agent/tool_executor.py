@@ -595,9 +595,11 @@ def _begin_tool_execution(
                 _redact_tool_args_for_display(function_name, function_args)
                 or function_args
             )
-            agent.tool_start_callback(
+            modified = agent.tool_start_callback(
                 tool_call_id, function_name, display_args
             )
+            if isinstance(modified, dict):
+                function_args = modified
         except Exception as callback_error:
             logging.debug("Tool start callback error: %s", callback_error)
 

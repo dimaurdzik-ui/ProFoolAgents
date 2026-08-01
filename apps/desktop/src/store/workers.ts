@@ -40,7 +40,7 @@ export const $workers = atom<WorkerLive[]>([])
 export const $workerTasks = atom<Record<string, WorkerTask[]>>({})
 
 // Persistent UI state for Office view
-export const $officeActiveTab = atom<'live' | 'staff' | 'review'>('live')
+export const $officeActiveTab = atom<import('../app/agents/office').OfficeTab>('live')
 export const $officeSelectedWorkerId = atom<string | null>(null)
 
 export const activeWorkers = (workers: WorkerLive[]) =>

@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 
-export type OfficeTab = 'live' | 'review' | 'staff'
+export type OfficeTab = 'live' | 'review' | 'staff' | 'kanban'
 type AutonomyMode = 'autonomous' | 'manual' | 'smart'
 
 interface Worker {
@@ -27,7 +27,7 @@ interface Worker {
   worker_id: string
 }
 
-interface WorkerTask {
+export interface WorkerTask {
   acceptance_criteria?: null | string
   deliverable?: null | string
   goal: string
@@ -37,6 +37,9 @@ interface WorkerTask {
   status: string
   worker_id: string
   worker_name?: null | string
+  priority?: string
+  pending_tool_name?: null | string
+  pending_tool_args?: null | string
 }
 
 interface AgentTemplate {
@@ -203,13 +206,14 @@ export function OfficeView({ tab }: { tab: Exclude<OfficeTab, 'live'> }) {
     )
   }
 
-  return tab === 'staff' ? <StaffDirectory office={office} /> : <ReviewInbox office={office} />
+  return tab === 'kanban' ? <KanbanBoard office={office} /> : tab === 'staff' ? <StaffDirectory office={office} /> : <ReviewInbox office={office} />
 }
 
+import { KanbanBoard } from './kanban-board'
 import { AssignTaskModal } from './assign-task-modal'
 import { WorkerDetailDrawer } from './worker-detail-drawer'
 
-type OfficeHook = ReturnType<typeof useOfficeData>
+export type OfficeHook = ReturnType<typeof useOfficeData>
 
 function StaffDirectory({ office }: { office: OfficeHook }) {
   const { t } = useI18n()
@@ -425,7 +429,7 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
                         size="xs"
                         variant="default"
                       >
-                        {t.agents.office.assignTask || 'Assign Task'}
+                        {'Assign Task'}
                       </Button>
                       <Button
                         onClick={() => setSelectedWorkerForDetail(worker)}
@@ -448,7 +452,7 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
           worker={selectedWorkerForTask as unknown as import('../../store/workers').WorkerLive}
           onClose={() => setSelectedWorkerForTask(null)}
           onSubmit={async (taskParams) => {
-            await office.requestGateway('tasks.create', taskParams)
+            await office.requestGateway('tasks.create', taskParams as any)
             await office.refresh(true)
           }}
         />
@@ -502,6 +506,7 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
   const { t } = useI18n()
   const copy = t.agents.office
   const [feedback, setFeedback] = useState<Record<string, string>>({})
+  const [modifiedArgs, setModifiedArgs] = useState<Record<string, string>>({})
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
@@ -514,7 +519,7 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
     [office.data.tasks, priorityFilter]
   )
 
-  const review = async (task: WorkerTask, action: 'approve' | 'reject') => {
+  const review = async (task: WorkerTask, action: 'approve' | 'approve_with_edits' | 'reject') => {
     const note = feedback[task.id]?.trim() ?? ''
 
     if (action === 'reject' && !note) {
@@ -529,16 +534,29 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
     try {
       let rpcMethod = ''
       if (task.status === 'waiting_tool_approval') {
-        rpcMethod = action === 'approve' ? 'tasks.approve_tool' : 'tasks.reject_tool'
+        rpcMethod = action.startsWith('approve') ? 'tasks.approve_tool' : 'tasks.reject_tool'
       } else {
-        rpcMethod = action === 'approve' ? 'tasks.approve' : 'tasks.reject'
+        rpcMethod = action.startsWith('approve') ? 'tasks.approve' : 'tasks.reject'
+      }
+      
+      let modified_args: any = undefined
+      if (action === 'approve_with_edits') {
+        try {
+          modified_args = JSON.parse(modifiedArgs[task.id])
+        } catch (e) {
+          setActionError('Invalid JSON in modified arguments')
+          setBusyId(null)
+          return
+        }
       }
       
       await office.requestGateway(rpcMethod, {
         feedback: action === 'reject' ? note : undefined,
+        modified_args,
         task_id: task.id
       })
       setFeedback(current => ({ ...current, [task.id]: '' }))
+      setModifiedArgs(current => ({ ...current, [task.id]: '' }))
       await office.refresh(true)
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause))
@@ -613,13 +631,15 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
                   </div>
                 ) : null}
                 {task.status === 'waiting_tool_approval' && task.pending_tool_name ? (
-                  <div className="rounded-md border border-border/50 bg-secondary/20 p-2">
+                  <div className="rounded-md border border-border/50 bg-secondary/20 p-2 grid gap-2">
                     <p className="text-[0.6rem] font-medium uppercase tracking-wide text-primary/80">
                       Pending Action: {task.pending_tool_name}
                     </p>
-                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap font-mono text-[0.65rem] text-muted-foreground">
-                      {task.pending_tool_args || '{}'}
-                    </pre>
+                    <Textarea
+                      className="mt-1 min-h-[120px] font-mono text-[0.65rem] text-muted-foreground"
+                      value={modifiedArgs[task.id] ?? task.pending_tool_args ?? '{}'}
+                      onChange={(e) => setModifiedArgs(current => ({ ...current, [task.id]: e.target.value }))}
+                    />
                   </div>
                 ) : null}
                 {criteria.length > 0 ? (
@@ -645,6 +665,11 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
                   <Button disabled={busy} onClick={() => void review(task, 'reject')} size="sm" variant="secondary">
                     {copy.reject}
                   </Button>
+                  {task.status === 'waiting_tool_approval' && modifiedArgs[task.id] && modifiedArgs[task.id] !== task.pending_tool_args ? (
+                    <Button disabled={busy} onClick={() => void review(task, 'approve_with_edits')} size="sm" variant="outline">
+                      Approve with Edits
+                    </Button>
+                  ) : null}
                   <Button disabled={busy} onClick={() => void review(task, 'approve')} size="sm">
                     {copy.approve}
                   </Button>

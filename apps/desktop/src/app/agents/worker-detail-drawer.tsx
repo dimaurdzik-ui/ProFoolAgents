@@ -44,7 +44,7 @@ export function WorkerDetailDrawer({ worker, tasks, onClose, onAssignTask }: Wor
             </div>
           </div>
           <Button onClick={() => onAssignTask(worker)} size="sm">
-            {t('agents.office.assignTask') || 'Assign Task'}
+            {(t.agents.office as any).assignTask || 'Assign Task'}
           </Button>
         </div>
         
@@ -53,13 +53,13 @@ export function WorkerDetailDrawer({ worker, tasks, onClose, onAssignTask }: Wor
             className={`py-2 px-4 ${activeTab === 'active' ? 'border-b-2 border-primary-500 text-primary-500' : 'text-base-400'}`}
             onClick={() => setActiveTab('active')}
           >
-            {t('agents.office.activeTask') || 'Active Task'} ({activeTasks.length})
+            {(t.agents.office as any).activeTask || 'Active Task'} ({activeTasks.length})
           </button>
           <button 
             className={`py-2 px-4 ${activeTab === 'history' ? 'border-b-2 border-primary-500 text-primary-500' : 'text-base-400'}`}
             onClick={() => setActiveTab('history')}
           >
-            {t('agents.office.taskHistory') || 'Task History'} ({historyTasks.length})
+            {(t.agents.office as any).taskHistory || 'Task History'} ({historyTasks.length})
           </button>
         </div>
 
@@ -67,7 +67,7 @@ export function WorkerDetailDrawer({ worker, tasks, onClose, onAssignTask }: Wor
           {activeTab === 'active' && (
             <div className="flex flex-col gap-4">
               {activeTasks.length === 0 ? (
-                <div className="text-base-400 text-center py-8">{t('agents.office.noActiveTask') || 'No active task'}</div>
+                <div className="text-base-400 text-center py-8">{(t.agents.office as any).noActiveTask || 'No active task'}</div>
               ) : (
                 activeTasks.map(task => (
                   <div key={task.id} className="bg-base-900 border border-base-800 p-4 rounded-lg">

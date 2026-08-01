@@ -54,6 +54,7 @@ def _init_schema(conn: sqlite3.Connection):
         updated_at           INTEGER NOT NULL,
         pending_tool_name    TEXT,
         pending_tool_args    TEXT,
+        modified_tool_args   TEXT,
         FOREIGN KEY(worker_id) REFERENCES workers(worker_id)
     )
     """)
@@ -64,6 +65,12 @@ def _init_schema(conn: sqlite3.Connection):
         cursor.execute("ALTER TABLE tasks ADD COLUMN pending_tool_args TEXT")
     except sqlite3.OperationalError:
         pass
+        
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN modified_tool_args TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS task_events (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,

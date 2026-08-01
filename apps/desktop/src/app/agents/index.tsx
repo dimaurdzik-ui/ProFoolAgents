@@ -96,10 +96,11 @@ export function AgentsView({ onClose }: AgentsViewProps) {
   const tabs = useMemo(
     () => [
       { id: 'live' as const, label: t.agents.office.live },
+      { id: 'kanban' as const, label: (t.agents.office as any).kanban || 'Kanban' },
       { id: 'staff' as const, label: t.agents.office.staff },
       { id: 'review' as const, label: t.agents.office.review }
     ],
-    [t.agents.office.live, t.agents.office.review, t.agents.office.staff]
+    [t.agents.office.live, t.agents.office.review, t.agents.office.staff, (t.agents.office as any).kanban]
   )
 
   return (

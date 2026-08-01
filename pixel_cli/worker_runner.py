@@ -45,9 +45,16 @@ class WorkerRunner:
         import json
         import time
         
-        def on_tool_start(tool_name, tool_args):
+        def on_tool_start(*cb_args):
             if worker['autonomy_mode'] != 'manual':
                 return
+                
+            if len(cb_args) == 3:
+                _, tool_name, tool_args = cb_args
+            elif len(cb_args) == 2:
+                tool_name, tool_args = cb_args
+            else:
+                return None
             
             update_task(
                 conn, task_id, 'status_change', 
@@ -60,17 +67,24 @@ class WorkerRunner:
             # Block until approved or rejected
             while True:
                 time.sleep(1)
-                current = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                current = conn.execute("SELECT status, modified_tool_args FROM tasks WHERE id = ?", (task_id,)).fetchone()
                 status = current['status']
                 
                 if status == 'working':
                     # Approved
-                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None)
+                    modified_args_str = current.get('modified_tool_args')
+                    parsed_modified_args = None
+                    if modified_args_str:
+                        try:
+                            parsed_modified_args = json.loads(modified_args_str)
+                        except json.JSONDecodeError:
+                            pass
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None)
                     update_worker(conn, worker_id, status='working')
-                    return
+                    return parsed_modified_args
                 elif status == 'rejected':
                     # Rejected
-                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, status='working')
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None, status='working')
                     update_worker(conn, worker_id, status='working')
                     raise Exception("Tool execution rejected by user.")
                     
@@ -126,9 +140,16 @@ class WorkerRunner:
         update_task(conn, task_id, 'status_change', status='working', retry_count=retry_count)
         update_worker(conn, worker_id, status='working')
         
-        def on_tool_start_retry(tool_name, tool_args):
+        def on_tool_start_retry(*cb_args):
             if worker['autonomy_mode'] != 'manual':
                 return
+                
+            if len(cb_args) == 3:
+                _, tool_name, tool_args = cb_args
+            elif len(cb_args) == 2:
+                tool_name, tool_args = cb_args
+            else:
+                return None
             
             update_task(
                 conn, task_id, 'status_change', 
@@ -141,15 +162,22 @@ class WorkerRunner:
             import time
             while True:
                 time.sleep(1)
-                current = conn.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+                current = conn.execute("SELECT status, modified_tool_args FROM tasks WHERE id = ?", (task_id,)).fetchone()
                 status = current['status']
                 
                 if status == 'working':
-                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None)
+                    modified_args_str = current.get('modified_tool_args')
+                    parsed_modified_args = None
+                    if modified_args_str:
+                        try:
+                            parsed_modified_args = json.loads(modified_args_str)
+                        except json.JSONDecodeError:
+                            pass
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None)
                     update_worker(conn, worker_id, status='working')
-                    return
+                    return parsed_modified_args
                 elif status == 'rejected':
-                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, status='working')
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None, status='working')
                     update_worker(conn, worker_id, status='working')
                     raise Exception("Tool execution rejected by user.")
         

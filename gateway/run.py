@@ -25848,7 +25848,12 @@ async def tasks_reject(params: dict) -> dict:
 @rpc_method("tasks.approve_tool")
 async def tasks_approve_tool(params: dict) -> dict:
     conn = connect()
-    update_task(conn, params["task_id"], "status_change", status="working")
+    modified_args = params.get("modified_args")
+    if modified_args is not None:
+        import json
+        update_task(conn, params["task_id"], "status_change", status="working", modified_tool_args=json.dumps(modified_args))
+    else:
+        update_task(conn, params["task_id"], "status_change", status="working")
     return {"success": True}
 
 @rpc_method("tasks.reject_tool")

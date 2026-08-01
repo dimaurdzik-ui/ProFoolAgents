@@ -49,46 +49,46 @@ export function AssignTaskModal({ worker, onClose, onSubmit }: AssignTaskModalPr
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="shadow-pixel border-[var(--stroke-pixel)] min-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{t('agents.office.assignTask') || 'Assign Task'}</DialogTitle>
+          <DialogTitle>{(t.agents.office as any).assignTask || 'Assign Task'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-4">
           <div>
             <label className="text-sm font-medium mb-1 block">
-              {t('agents.office.goal') || 'Goal'}
+              {(t.agents.office as any).goal || 'Goal'}
             </label>
             <Textarea 
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder={t('agents.office.goalPlaceholder') || 'What should this worker accomplish?'}
-              minRows={3}
+              placeholder={(t.agents.office as any).goalPlaceholder || 'What should this worker accomplish?'}
+              
               required
             />
           </div>
           
           <div>
             <label className="text-sm font-medium mb-1 block">
-              {t('agents.office.deliverable') || 'Expected deliverable'}
+              {(t.agents.office as any).deliverable || 'Expected deliverable'}
             </label>
             <Input 
               value={deliverable}
               onChange={(e) => setDeliverable(e.target.value)}
-              placeholder={t('agents.office.deliverablePlaceholder') || 'What artifact should be produced?'}
+              placeholder={(t.agents.office as any).deliverablePlaceholder || 'What artifact should be produced?'}
             />
           </div>
 
           <div>
             <label className="text-sm font-medium mb-1 block">
-              {t('agents.office.priority') || 'Priority'}
+              {(t.agents.office as any).priority || 'Priority'}
             </label>
             <select 
               className="w-full bg-base-800 border border-base-700 rounded p-2"
               value={priority}
               onChange={(e) => setPriority(e.target.value as any)}
             >
-              <option value="low">{t('agents.office.priorityLow') || 'Low'}</option>
-              <option value="normal">{t('agents.office.priorityNormal') || 'Normal'}</option>
-              <option value="high">{t('agents.office.priorityHigh') || 'High'}</option>
-              <option value="urgent">{t('agents.office.priorityUrgent') || 'Urgent'}</option>
+              <option value="low">{(t.agents.office as any).priorityLow || 'Low'}</option>
+              <option value="normal">{(t.agents.office as any).priorityNormal || 'Normal'}</option>
+              <option value="high">{(t.agents.office as any).priorityHigh || 'High'}</option>
+              <option value="urgent">{(t.agents.office as any).priorityUrgent || 'Urgent'}</option>
             </select>
           </div>
 
