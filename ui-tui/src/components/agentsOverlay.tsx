@@ -38,11 +38,11 @@ import { OverlayScrollbar } from './overlayScrollbar.js'
 // ── Types + lookup tables ────────────────────────────────────────────
 
 type SortMode = 'depth-first' | 'duration-desc' | 'status' | 'tools-desc'
-type FilterMode = 'all' | 'failed' | 'leaf' | 'running'
+type FilterMode = 'all' | 'error' | 'leaf' | 'running'
 type Status = SubagentProgress['status']
 
 const SORT_ORDER: readonly SortMode[] = ['depth-first', 'tools-desc', 'duration-desc', 'status']
-const FILTER_ORDER: readonly FilterMode[] = ['all', 'running', 'failed', 'leaf']
+const FILTER_ORDER: readonly FilterMode[] = ['all', 'running', 'error', 'leaf']
 
 const SORT_LABEL: Record<SortMode, string> = {
   'depth-first': 'spawn order',
@@ -53,7 +53,7 @@ const SORT_LABEL: Record<SortMode, string> = {
 
 const FILTER_LABEL: Record<FilterMode, string> = {
   all: 'all',
-  failed: 'failed',
+  error: 'error',
   leaf: 'leaves',
   running: 'running'
 }
@@ -82,9 +82,7 @@ const FILTER_PREDICATES: Record<FilterMode, (n: SubagentNode) => boolean> = {
   leaf: n => n.children.length === 0,
   running: n => n.item.status === 'running' || n.item.status === 'queued',
   failed: n =>
-    n.item.status === 'error' ||
-    n.item.status === 'failed' ||
-    n.item.status === 'interrupted' ||
+            n.item.status === 'interrupted' ||
     n.item.status === 'timeout'
 }
 

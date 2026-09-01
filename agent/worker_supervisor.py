@@ -323,7 +323,7 @@ class WorkerSupervisor:
                     task_id=task_id,
                     worker_id=worker_id,
                     goal=goal,
-                    status="completed" if successful else "failed",
+                    status="completed" if successful else "error",
                     summary=result.get("final_response", ""),
                     error=result.get("error", ""),
                 )
@@ -662,7 +662,7 @@ class WorkerSupervisor:
                 task_id=task_id,
                 worker_id=worker_id,
                 goal=goal,
-                status="failed",
+                status="error",
                 error=reason,
             )
         except Exception:

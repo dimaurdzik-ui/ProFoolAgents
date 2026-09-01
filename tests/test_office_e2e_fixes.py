@@ -106,3 +106,91 @@ async def test_dependency_cycles(fresh_db, monkeypatch):
     for task_id in ["task-A1", "task-B1", "task-A2", "task-B2", "task-C2"]:
         assert statuses[task_id]["status"] == "error"
         assert "Cyclic dependency" in statuses[task_id]["error_text"] or "Dependency failed" in statuses[task_id]["error_text"]
+
+@pytest.mark.asyncio
+async def test_delegates_to_professional_agent(fresh_db, monkeypatch):
+    """Test that professional agent_id correctly applies delegates_to and nameless caller gets denied."""
+    from agent.agent_registry import AgentRegistry, AgentTemplate
+    registry = AgentRegistry.get_instance()
+    
+    # Setup test templates
+    t_manager = AgentTemplate(id="test-manager", name="Test Manager", category="test", description="", prompt_version=1, allowed_tools=[], starter_prompts=[], capabilities=[], system_prompt="", delegates_to=["test-worker"])
+    t_worker = AgentTemplate(id="test-worker", name="Test Worker", category="test", description="", prompt_version=1, allowed_tools=[], starter_prompts=[], capabilities=[], system_prompt="", delegates_to=[])
+    
+    registry._templates["test-manager"] = t_manager
+    registry._templates["test-worker"] = t_worker
+
+    # Mock agent with professional identity
+    class MockAgent:
+        def __init__(self, agent_id=None, office_id=None):
+            self.agent_id = agent_id
+            self._session_init_model_config = {"_office_template_id": office_id} if office_id else {}
+
+    manager_agent = MockAgent(agent_id="test-manager")
+    worker_agent = MockAgent(agent_id="test-worker")
+    unknown_agent = MockAgent()
+    
+    from tools.team_awareness_tool import propose_task_delegation
+    from tools.delegate_tool import delegate_task
+    
+    worker = fresh_db.hire_worker("test-worker", "test-worker", "Test Worker", "smart")
+    fresh_db.update_worker("test-worker", {"status": "idle", "manager_id": "parent-123"})
+    manager = fresh_db.hire_worker("test-manager", "test-manager", "Test Manager", "smart")
+    fresh_db.update_worker("test-manager", {"status": "idle", "manager_id": "parent-123"})
+    
+    # propose_task_delegation tests
+    res = propose_task_delegation({"worker_id": "test-worker", "goal": "do it", "deliverable": "done", "priority": 1, "acceptance_criteria": ["done"]}, agent=manager_agent, session_id="parent-123")
+    assert "Successfully" in res, f"Manager should delegate to worker: {res}"
+    
+    res = propose_task_delegation({"worker_id": "test-manager", "goal": "do it", "deliverable": "done", "priority": 1, "acceptance_criteria": ["done"]}, agent=worker_agent, session_id="parent-123")
+    assert "error" in res and "not authorized" in res, f"Worker should NOT delegate to manager: {res}"
+    
+    res = propose_task_delegation({"worker_id": "test-worker", "goal": "do it", "deliverable": "done", "priority": 1, "acceptance_criteria": ["done"]}, agent=unknown_agent, session_id="parent-123")
+    assert "error" in res and "could not be determined" in res, f"Unknown agent should NOT delegate: {res}"
+    
+@pytest.mark.asyncio
+async def test_messenger_task_permissions(fresh_db, monkeypatch):
+    """Test task-scoped messaging permissions and team-scoped non-task permissions."""
+    db = fresh_db
+    now = time.time()
+    
+    db.hire_worker("worker-assignee", "test", "A", "smart")
+    db.hire_worker("worker-colleague", "test", "B", "smart")
+    db.hire_worker("worker-other", "test", "C", "smart")
+    
+    db.update_worker("worker-assignee", {"manager_id": "team-1", "status": "idle"})
+    db.update_worker("worker-colleague", {"manager_id": "team-1", "status": "idle"})
+    db.update_worker("worker-other", {"manager_id": "team-2", "status": "idle"})
+    
+    def _seed(conn):
+        conn.execute(
+            "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
+            ("manager-1", "test", now)
+        )
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-123", "manager-1", "test", "worker-assignee", "goal", "working", "smart", now, now)
+        )
+    db._execute_write(_seed)
+    
+    monkeypatch.setattr("pixel_state.SessionDB", lambda: fresh_db)
+    from tools.send_message_tool import _deliver_worker_message
+    
+    # 1. Unrelated same-team worker CANNOT write to another's task
+    res = json.loads(_deliver_worker_message("worker-assignee", "msg", sender_id="worker-colleague", task_id="task-123"))
+    assert "error" in res and "Permission denied" in res["error"]
+    
+    # 2. Manager CAN write to task
+    res = json.loads(_deliver_worker_message("worker-assignee", "msg", sender_id="manager-1", task_id="task-123"))
+    assert res.get("success") is True
+    
+    # 3. Normal same-team chat without task_id WORKS
+    res = json.loads(_deliver_worker_message("worker-assignee", "msg", sender_id="worker-colleague"))
+    assert res.get("success") is True
+    
+    # 4. Cross-team chat without task_id FAILS
+    res = json.loads(_deliver_worker_message("worker-assignee", "msg", sender_id="worker-other"))
+    assert "error" in res and "Permission denied" in res["error"]
+
+

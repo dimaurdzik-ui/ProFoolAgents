@@ -18,7 +18,7 @@ export interface ActivityItem {
   tone: 'error' | 'info' | 'warn'
 }
 
-export type SubagentStatus = 'completed' | 'error' | 'failed' | 'interrupted' | 'queued' | 'running' | 'timeout'
+export type SubagentStatus = 'completed' | 'error' | 'interrupted' | 'queued' | 'running' | 'timeout'
 
 export interface SubagentProgress {
   apiCalls?: number
@@ -148,7 +148,7 @@ export type SectionVisibility = Partial<Record<SectionName, DetailsMode>>
 export interface McpServerStatus {
   connected: boolean
   disabled?: boolean
-  status?: 'configured' | 'connecting' | 'connected' | 'disabled' | 'failed'
+  status?: 'configured' | 'connecting' | 'connected' | 'disabled'
   name: string
   tools: number
   transport: string

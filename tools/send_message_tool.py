@@ -374,17 +374,22 @@ def _deliver_worker_message(worker_id: str, message: str, sender_id: str, messag
             manager_session = task_row["parent_session_id"]
             assignee_id = task_row["worker_id"]
             
-            sender_is_manager = (sender_id == manager_session)
-            sender_is_assignee = (sender_id == assignee_id)
-            recipient_is_assignee = (worker_id == assignee_id)
+            sender_is_related = (sender_id == manager_session or sender_id == assignee_id)
+            recipient_is_related = (worker_id == manager_session or worker_id == assignee_id)
             
-            sender_worker = db.get_worker(sender_id)
-            same_team = False
-            if sender_worker and worker.manager_id and sender_worker.manager_id == worker.manager_id:
-                same_team = True
-                
-            if not (sender_is_manager or sender_is_assignee or recipient_is_assignee or same_team):
+            if not (sender_is_related and recipient_is_related):
                 return tool_error(f"Permission denied: Sender '{sender_id}' is not authorized to discuss task '{task_id}' with '{worker_id}'.")
+    else:
+        # Non-task message: must be same team (or manager)
+        sender_worker = db.get_worker(sender_id)
+        same_team = False
+        if sender_worker and worker.manager_id and sender_worker.manager_id == worker.manager_id:
+            same_team = True
+        is_manager = (sender_id == worker.manager_id)
+        # also if sender_id is system or parent session, we allow it
+        # For safety, let's allow if they are same team, or sender is manager, or it's a CLI/system call (not a worker)
+        if sender_id.startswith("worker-") and not (same_team or is_manager):
+            return tool_error(f"Permission denied: Sender '{sender_id}' is not on the same team as '{worker_id}'.")
     msg_id = f"msg-{uuid.uuid4().hex[:8]}"
     now = time.time()
 

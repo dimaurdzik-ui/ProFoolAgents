@@ -364,7 +364,6 @@ const pushTool = pushUnique(8)
 const KNOWN_SUBAGENT_STATUSES = new Set<SubagentStatus>([
   'completed',
   'error',
-  'failed',
   'interrupted',
   'queued',
   'running',
@@ -607,7 +606,7 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
   // otherwise a stale `subagent.start` / `spawn_requested` can clobber a
   // terminal state from complete (failed/interrupted/timeout/error).
   const isTerminalStatus = (s: SubagentProgress['status']) =>
-    s === 'completed' || s === 'error' || s === 'failed' || s === 'interrupted' || s === 'timeout'
+    s === 'completed' || s === 'error' || s === 'interrupted' || s === 'timeout'
 
   const keepTerminalElseRunning = (s: SubagentProgress['status']) => (isTerminalStatus(s) ? s : 'running')
 

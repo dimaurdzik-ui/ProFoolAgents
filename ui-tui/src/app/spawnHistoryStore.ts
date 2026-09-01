@@ -24,7 +24,6 @@ const HISTORY_LIMIT = 10
 const KNOWN_SUBAGENT_STATUSES = new Set<SubagentStatus>([
   'completed',
   'error',
-  'failed',
   'interrupted',
   'queued',
   'running',
