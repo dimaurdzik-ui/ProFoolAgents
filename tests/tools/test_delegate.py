@@ -196,7 +196,7 @@ class TestStripBlockedTools(unittest.TestCase):
         names = {item["function"]["name"] for item in definitions}
         self.assertIn("delegate_task", names)
         self.assertTrue(
-            (DELEGATE_BLOCKED_TOOLS - {"delegate_task"}).isdisjoint(names)
+            (DELEGATE_BLOCKED_TOOLS - {"delegate_task", "propose_task_delegation", "list_active_team", "propose_hire_worker", "send_worker_message"}).isdisjoint(names)
         )
 
 
@@ -489,7 +489,7 @@ class TestDelegateObservability(unittest.TestCase):
             MockAgent.return_value = mock_child
 
             result = json.loads(delegate_task(goal="Test empty sentinel", parent_agent=parent))
-            self.assertEqual(result["results"][0]["status"], "failed")
+            self.assertEqual(result["results"][0]["status"], "error")
 
 
 class TestSubagentCostRollup(unittest.TestCase):

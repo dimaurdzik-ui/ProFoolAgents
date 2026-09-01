@@ -47,9 +47,12 @@ from utils import base_url_hostname, is_truthy_value
 DELEGATE_BLOCKED_TOOLS = frozenset(
     [
         "delegate_task",  # no recursive delegation
+        "propose_task_delegation",
+        "list_active_team",
+        "propose_hire_worker",
         "clarify",  # no user interaction
         "memory",  # no writes to shared MEMORY.md
-        "send_message",  # no cross-platform side effects
+        "send_worker_message",  # no cross-platform side effects
         "cronjob",  # no scheduling more work in the parent's name
     ]
 )

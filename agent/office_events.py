@@ -44,7 +44,7 @@ def enqueue_office_completion(
             "goal": goal or f"Office task {task_id}",
             "role": "office_worker",
             "model": "",
-            "status": "failed" if status in {"failed", "error"} else "completed",
+            "status": "error" if status in {"failed", "error"} else "completed",
             "summary": summary,
             "error": error,
             "api_calls": 0,

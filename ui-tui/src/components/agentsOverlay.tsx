@@ -60,7 +60,6 @@ const FILTER_LABEL: Record<FilterMode, string> = {
 
 const STATUS_RANK: Record<Status, number> = {
   error: 0,
-  failed: 0,
   interrupted: 1,
   timeout: 1,
   running: 2,
@@ -81,9 +80,7 @@ const FILTER_PREDICATES: Record<FilterMode, (n: SubagentNode) => boolean> = {
   all: () => true,
   leaf: n => n.children.length === 0,
   running: n => n.item.status === 'running' || n.item.status === 'queued',
-  failed: n =>
-            n.item.status === 'interrupted' ||
-    n.item.status === 'timeout'
+  error: n => n.item.status === 'error' || n.item.status === 'interrupted' || n.item.status === 'timeout'
 }
 
 const STATUS_GLYPH: Record<Status, { color: (t: Theme) => string; glyph: string }> = {
@@ -91,7 +88,6 @@ const STATUS_GLYPH: Record<Status, { color: (t: Theme) => string; glyph: string 
   queued: { color: t => t.color.muted, glyph: '○' },
   completed: { color: t => t.color.statusGood, glyph: '✓' },
   interrupted: { color: t => t.color.warn, glyph: '■' },
-  failed: { color: t => t.color.error, glyph: '✗' },
   timeout: { color: t => t.color.warn, glyph: '⌛' },
   error: { color: t => t.color.error, glyph: '⚠' }
 }

@@ -326,7 +326,7 @@ function SubagentAccordion({
   const aggregate = node.aggregate
 
   const statusTone: 'dim' | 'error' | 'warn' =
-    item.status === 'error' || item.status === 'failed'
+    item.status === 'error'
       ? 'error'
       : item.status === 'interrupted' || item.status === 'timeout'
         ? 'warn'

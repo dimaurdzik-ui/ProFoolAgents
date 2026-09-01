@@ -200,8 +200,46 @@ class AgentRegistry:
     def get_all_templates(self) -> List[AgentTemplate]:
         return list(self._templates.values())
 
-def get_agent_template(agent_id: str) -> Optional[AgentTemplate]:
-    return AgentRegistry.get_instance().get_template(agent_id)
+def get_agent_template(template_id: str) -> Optional[AgentTemplate]:
+    registry = AgentRegistry.get_instance()
+    return registry.get_template(template_id)
+
+def get_caller_template_id(agent) -> Optional[str]:
+    """Resolve canonical template identity of the caller."""
+    if not agent:
+        return None
+        
+    # Check agent.agent_id first (e.g. if it's explicitly spawned as a professional role)
+    agent_id = getattr(agent, "agent_id", None)
+    if agent_id and get_agent_template(agent_id):
+        return agent_id
+        
+    # Fallback to init config
+    office_id = getattr(agent, "_session_init_model_config", {}).get("_office_template_id")
+    if office_id and get_agent_template(office_id):
+        return office_id
+        
+    return None
+
+def can_delegate(caller_template_id: Optional[str], target_template_id: str) -> tuple[bool, str]:
+    """Fail-closed authorization check for delegation."""
+    if not caller_template_id:
+        return False, "Caller template identity could not be determined. Delegation denied."
+        
+    parent_template = get_agent_template(caller_template_id)
+    target_template = get_agent_template(target_template_id)
+    
+    if not parent_template:
+        return False, f"Caller template '{caller_template_id}' not found."
+    if not target_template:
+        return False, f"Target template '{target_template_id}' not found."
+        
+    allowed = parent_template.delegates_to or []
+    if target_template.id not in allowed and "*" not in allowed:
+        return False, f"Agent '{parent_template.name}' is not authorized to delegate to '{target_template.name}'. Allowed delegates: {allowed}"
+        
+    return True, ""
+
 
 def get_all_agent_templates() -> List[AgentTemplate]:
     return AgentRegistry.get_instance().get_all_templates()
