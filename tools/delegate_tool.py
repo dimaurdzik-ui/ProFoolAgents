@@ -479,10 +479,10 @@ def _delegated_result_status(
     if office_status == "waiting_approval":
         return "waiting_approval"
     if office_status == "error":
-        return "failed"
+        return "error"
     if summary and not empty_sentinel:
         return "completed"
-    return "failed"
+    return "error"
 
 
 def _verify_evidence(evidence: Any) -> List[str]:
@@ -3347,9 +3347,10 @@ def delegate_task(
             parent_template_id = getattr(parent_agent, "_session_init_model_config", {}).get("_office_template_id")
             if parent_template_id:
                 parent_template = get_agent_template(parent_template_id)
-                if parent_template and parent_template.delegates_to:
-                    if template and template.id not in parent_template.delegates_to:
-                        return tool_error(f"Task {i}: Agent '{parent_template.name}' is not authorized to delegate to '{template.name}'. Allowed delegates: {parent_template.delegates_to}")
+                if parent_template and template:
+                    allowed = parent_template.delegates_to or []
+                    if template.id not in allowed and "*" not in allowed:
+                        return tool_error(f"Task {i}: Agent '{parent_template.name}' is not authorized to delegate to '{template.name}'. Allowed delegates: {allowed}")
             
             if template and template.id != TEAM_AGENT_ID and worker is None:
                     worker = db.find_worker_by_template(template.id)

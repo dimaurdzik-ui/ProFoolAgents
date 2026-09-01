@@ -70,16 +70,18 @@ def propose_task_delegation(args: dict, **kwargs) -> str:
     session_id = kwargs.get("session_id", "agent")
     agent = kwargs.get("agent")
     
-    # 1. Permission layer: Check delegates_to
-    from pixel_cli.worker_registry import AgentRegistry
+    # 1. Permission layer: Check delegates_to (Fail-closed)
+    from agent.agent_registry import get_agent_template
     caller_role = getattr(agent, "_delegate_role", None) if agent else None
     
     if caller_role:
-        parent_template = AgentRegistry.get_template(caller_role)
-        target_template = AgentRegistry.get_template(worker.template_id)
-        if parent_template and parent_template.delegates_to:
-            if target_template and target_template.id not in parent_template.delegates_to:
-                return tool_error(f"Permission denied: Agent '{parent_template.name}' is not authorized to delegate to '{target_template.name}'. Allowed delegates: {parent_template.delegates_to}")
+        parent_template = get_agent_template(caller_role)
+        target_template = get_agent_template(worker.template_id)
+        if parent_template and target_template:
+            # fail-closed: if not explicitly allowed, deny. Orchestrator can be exception if delegates_to has '*'
+            allowed = parent_template.delegates_to or []
+            if target_template.id not in allowed and "*" not in allowed:
+                return tool_error(f"Permission denied: Agent '{parent_template.name}' is not authorized to delegate to '{target_template.name}'. Allowed delegates: {allowed}")
     
     if session_id and worker.manager_id != session_id:
         # If the caller role explicitly delegates to this template, we might allow cross-team, 

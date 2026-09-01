@@ -57,3 +57,52 @@ async def test_worker_supervisor_dependency_validation(fresh_db, monkeypatch):
     assert statuses["task-missing"]["status"] == "error"
     assert "Missing dependencies" in statuses["task-missing"]["error_text"]
 
+
+@pytest.mark.asyncio
+async def test_dependency_cycles(fresh_db, monkeypatch):
+    db = fresh_db
+    worker = db.hire_worker("cycle-worker", "seo-specialist", "SEO Bob", "smart")
+    db.update_worker("cycle-worker", {"status": "idle"})
+    now = time.time()
+    
+    def _seed(conn):
+        # A -> B -> A cycle
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, dependencies_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-A1", "parent-123", "seo", "cycle-worker", "A1", "queued", "smart", '["task-B1"]', now, now)
+        )
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, dependencies_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-B1", "parent-123", "seo", "cycle-worker", "B1", "queued", "smart", '["task-A1"]', now, now)
+        )
+        
+        # A -> B -> C -> A cycle
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, dependencies_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-A2", "parent-123", "seo", "cycle-worker", "A2", "queued", "smart", '["task-B2"]', now, now)
+        )
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, dependencies_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-B2", "parent-123", "seo", "cycle-worker", "B2", "queued", "smart", '["task-C2"]', now, now)
+        )
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, dependencies_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("task-C2", "parent-123", "seo", "cycle-worker", "C2", "queued", "smart", '["task-A2"]', now, now)
+        )
+        
+    db._execute_write(_seed)
+    supervisor = WorkerSupervisor(db=db)
+    
+    await supervisor._poll_queue()
+    
+    with db._read_ctx() as conn:
+        statuses = {r["id"]: dict(r) for r in conn.execute("SELECT id, status, error_text FROM delegate_tasks").fetchall()}
+        
+    for task_id in ["task-A1", "task-B1", "task-A2", "task-B2", "task-C2"]:
+        assert statuses[task_id]["status"] == "error"
+        assert "Cyclic dependency" in statuses[task_id]["error_text"] or "Dependency failed" in statuses[task_id]["error_text"]

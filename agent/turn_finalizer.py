@@ -253,8 +253,9 @@ def finalize_turn(
         _cleanup_errors.append(f"Trajectory save failed: {e}")
 
     # Process claimed inbox messages
+    # Only mark as processed if the turn successfully completed without failing or being interrupted.
     claimed_ids = getattr(agent, "_claimed_inbox_ids", None)
-    if claimed_ids and hasattr(agent, "session_db") and agent.session_db:
+    if claimed_ids and hasattr(agent, "session_db") and agent.session_db and not interrupted and not failed:
         try:
             def _mark_processed(conn):
                 placeholders = ",".join("?" for _ in claimed_ids)

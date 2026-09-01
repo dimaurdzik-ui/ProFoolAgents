@@ -123,6 +123,44 @@ class WorkerSupervisor:
                             
                         unfinished = [d for d, s in dep_statuses.items() if s != 'completed']
                         if unfinished:
+                            # Cycle detection
+                            with self.db._read_ctx() as conn:
+                                all_deps_rows = conn.execute(
+                                    "SELECT id, dependencies_json FROM delegate_tasks WHERE status != 'completed' AND dependencies_json IS NOT NULL"
+                                ).fetchall()
+                            
+                            graph = {}
+                            for r in all_deps_rows:
+                                try:
+                                    g_deps = json.loads(r["dependencies_json"])
+                                    if isinstance(g_deps, list):
+                                        graph[r["id"]] = g_deps
+                                except Exception:
+                                    pass
+                            
+                            def has_cycle(start_node):
+                                visited = set()
+                                stack = set()
+                                def dfs(node):
+                                    if node in stack:
+                                        return True
+                                    if node in visited:
+                                        return False
+                                    visited.add(node)
+                                    stack.add(node)
+                                    for neighbor in graph.get(node, []):
+                                        if dfs(neighbor):
+                                            return True
+                                    stack.remove(node)
+                                    return False
+                                return dfs(start_node)
+
+                            if has_cycle(task_id):
+                                def _mark_cycle(conn):
+                                    conn.execute("UPDATE delegate_tasks SET status = 'error', error_text = ? WHERE id = ?", ("Cyclic dependency detected.", task_id))
+                                self.db._execute_write(_mark_cycle)
+                                continue
+
                             # Still blocked by dependencies, wait for them to finish
                             continue
                 

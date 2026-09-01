@@ -341,7 +341,7 @@ def test_office_worker_error_text_is_never_classified_as_completed():
         summary=result["final_response"],
         interrupted=False,
         empty_sentinel=False,
-    ) == "failed"
+    ) == "error"
 
 
 @pytest.mark.asyncio

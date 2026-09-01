@@ -371,12 +371,20 @@ def _deliver_worker_message(worker_id: str, message: str, sender_id: str, messag
             if not task_row:
                 return tool_error(f"Task {task_id} does not exist.")
             
-            # Simple permission check: must be either the manager (parent session), or the assigned worker, or someone from the same team if we have a team system
-            # Here we just require the sender or recipient to be related to the task
-            if worker_id != task_row["worker_id"] and not sender_id.startswith(task_row["parent_session_id"]):
-                # Allow it but log it? The user asked to make it a strict rule.
-                pass
+            manager_session = task_row["parent_session_id"]
+            assignee_id = task_row["worker_id"]
+            
+            sender_is_manager = (sender_id == manager_session)
+            sender_is_assignee = (sender_id == assignee_id)
+            recipient_is_assignee = (worker_id == assignee_id)
+            
+            sender_worker = db.get_worker(sender_id)
+            same_team = False
+            if sender_worker and worker.manager_id and sender_worker.manager_id == worker.manager_id:
+                same_team = True
                 
+            if not (sender_is_manager or sender_is_assignee or recipient_is_assignee or same_team):
+                return tool_error(f"Permission denied: Sender '{sender_id}' is not authorized to discuss task '{task_id}' with '{worker_id}'.")
     msg_id = f"msg-{uuid.uuid4().hex[:8]}"
     now = time.time()
 
