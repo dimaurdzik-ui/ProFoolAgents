@@ -3347,13 +3347,13 @@ def delegate_task(
                 template = get_agent_template(str(worker_id))
                 
             # Permission check: ensure parent can delegate to this template
-            parent_template_id = getattr(parent_agent, "_session_init_model_config", {}).get("_office_template_id")
-            if parent_template_id:
-                parent_template = get_agent_template(parent_template_id)
-                if parent_template and template:
-                    allowed = parent_template.delegates_to or []
-                    if template.id not in allowed and "*" not in allowed:
-                        return tool_error(f"Task {i}: Agent '{parent_template.name}' is not authorized to delegate to '{template.name}'. Allowed delegates: {allowed}")
+            from agent.agent_registry import get_caller_template_id, can_delegate
+            
+            caller_template_id = get_caller_template_id(parent_agent)
+            target_id = worker.template_id if worker else str(worker_id)
+            is_allowed, deny_reason = can_delegate(caller_template_id, target_id)
+            if not is_allowed:
+                return tool_error(f"Task {i}: {deny_reason}")
             
             if template and template.id != TEAM_AGENT_ID and worker is None:
                     worker = db.find_worker_by_template(template.id)

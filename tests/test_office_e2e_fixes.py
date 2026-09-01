@@ -125,6 +125,25 @@ async def test_delegates_to_professional_agent(fresh_db, monkeypatch):
         def __init__(self, agent_id=None, office_id=None):
             self.agent_id = agent_id
             self._session_init_model_config = {"_office_template_id": office_id} if office_id else {}
+            self.model = "test-model"
+            self.api_key = "test-key"
+            self.provider = "test-provider"
+            self.base_url = "http://test"
+            self.platform = "cli"
+            self.api_mode = "chat_completions"
+            self._client_kwargs = {}
+            self._delegate_depth = 0
+            self._active_children = []
+            import threading
+            self._active_children_lock = threading.Lock()
+            self._print_fn = None
+            self.tool_progress_callback = None
+            self.thinking_callback = None
+            self.providers_allowed = None
+            self.providers_ignored = None
+            self.providers_order = None
+            self.provider_sort = None
+            self._session_db = None
 
     manager_agent = MockAgent(agent_id="test-manager")
     worker_agent = MockAgent(agent_id="test-worker")
@@ -147,6 +166,23 @@ async def test_delegates_to_professional_agent(fresh_db, monkeypatch):
     
     res = propose_task_delegation({"worker_id": "test-worker", "goal": "do it", "deliverable": "done", "priority": 1, "acceptance_criteria": ["done"]}, agent=unknown_agent, session_id="parent-123")
     assert "error" in res and "could not be determined" in res, f"Unknown agent should NOT delegate: {res}"
+    
+    # delegate_task tests (regression check: agent_id only, no _office_template_id)
+    # Manager has agent_id="test-manager" and _office_template_id=None
+    import json
+    from unittest.mock import patch
+    with patch("tools.delegate_tool._run_single_child", return_value={"status": "completed"}):
+        res = delegate_task(tasks=[{"goal": "do it", "worker_id": "test-worker"}], parent_agent=manager_agent)
+        res_data = json.loads(res)
+        assert "results" in res_data, f"Manager should delegate to worker via delegate_task: {res}"
+        
+        res = delegate_task(tasks=[{"goal": "do it", "worker_id": "test-manager"}], parent_agent=worker_agent)
+        res_data = json.loads(res)
+        assert "error" in res_data and "not authorized" in res_data["error"], f"Worker should NOT delegate to manager via delegate_task: {res}"
+        
+        res = delegate_task(tasks=[{"goal": "do it", "worker_id": "test-worker"}], parent_agent=unknown_agent)
+        res_data = json.loads(res)
+        assert "error" in res_data and "could not be determined" in res_data["error"], f"Unknown agent should NOT delegate via delegate_task: {res}"
     
 @pytest.mark.asyncio
 async def test_messenger_task_permissions(fresh_db, monkeypatch):
