@@ -68,28 +68,36 @@ def propose_task_delegation(args: dict, **kwargs) -> str:
         return tool_error("priority must be an integer")
 
     session_id = kwargs.get("session_id", "agent")
+    agent = kwargs.get("agent")
+    
+    # 1. Permission layer: Check delegates_to
+    from pixel_cli.worker_registry import AgentRegistry
+    caller_role = getattr(agent, "_delegate_role", None) if agent else None
+    
+    if caller_role:
+        parent_template = AgentRegistry.get_template(caller_role)
+        target_template = AgentRegistry.get_template(worker.template_id)
+        if parent_template and parent_template.delegates_to:
+            if target_template and target_template.id not in parent_template.delegates_to:
+                return tool_error(f"Permission denied: Agent '{parent_template.name}' is not authorized to delegate to '{target_template.name}'. Allowed delegates: {parent_template.delegates_to}")
+    
     if session_id and worker.manager_id != session_id:
+        # If the caller role explicitly delegates to this template, we might allow cross-team, 
+        # but for now respect the team boundary unless orchestrated otherwise.
         return tool_error(
             f"Worker {worker_id} does not belong to this team session. "
             "Use list_active_team to select one of this session's workers."
         )
     
-    # Simple idempotency based on worker and goal hash
-    goal_hash = hashlib.md5(task_goal.encode()).hexdigest()[:8]
-    task_id = f"task-{worker_id[-8:]}-{goal_hash}"
+    # 5. Canonical Task IDs: Use UUID instead of text hash
+    import uuid
+    task_id = f"task-{uuid.uuid4().hex}"
     
     now = time.time()
     
     def _create_task(conn):
-        existing = conn.execute("SELECT id, status FROM delegate_tasks WHERE id = ?", (task_id,)).fetchone()
-        if existing:
-            return {"existing": existing["status"]}
-        busy = conn.execute(
-            "SELECT id FROM delegate_tasks WHERE worker_id = ? AND status IN ('queued', 'working')",
-            (worker_id,),
-        ).fetchone()
-        if busy:
-            return {"busy": busy["id"]}
+        # 6. Worker Queue: Do NOT prevent queuing if worker is busy.
+        # Manager can queue multiple tasks. WorkerSupervisor handles execution limit.
         conn.execute(
             "INSERT INTO delegate_tasks "
             "(id, parent_session_id, worker_role, worker_id, goal, deliverable, acceptance_criteria, priority, status, "
@@ -114,10 +122,6 @@ def propose_task_delegation(args: dict, **kwargs) -> str:
 
     try:
         outcome = db._execute_write(_create_task)
-        if "existing" in outcome:
-            return tool_result(f"Task already exists with ID: {task_id} (Status: {outcome['existing']}).")
-        if "busy" in outcome:
-            return tool_error(f"Worker {worker_id} is already busy with task {outcome['busy']}. Wait for them to finish before assigning another.")
         
         # Ensure WorkerSupervisor is running
         try:

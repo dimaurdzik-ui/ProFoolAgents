@@ -248,9 +248,25 @@ def finalize_turn(
     # list of parts; the trajectory format wants a plain string.
     try:
         agent._save_trajectory(messages, _summarize_user_message_for_log(user_message), completed)
-    except Exception as _save_err:
-        _cleanup_errors.append(f"save_trajectory: {_save_err}")
-        logger.error("finalize_turn: _save_trajectory failed: %s", _save_err, exc_info=True)
+    except Exception as e:
+        logger.exception("Failed to save trajectory")
+        _cleanup_errors.append(f"Trajectory save failed: {e}")
+
+    # Process claimed inbox messages
+    claimed_ids = getattr(agent, "_claimed_inbox_ids", None)
+    if claimed_ids and hasattr(agent, "session_db") and agent.session_db:
+        try:
+            def _mark_processed(conn):
+                placeholders = ",".join("?" for _ in claimed_ids)
+                conn.execute(
+                    f"UPDATE agent_inbox SET status = 'processed' WHERE id IN ({placeholders}) AND status = 'claimed'",
+                    claimed_ids
+                )
+            agent.session_db._execute_write(_mark_processed)
+            agent._claimed_inbox_ids = []
+        except Exception as e:
+            logger.exception("Failed to mark inbox messages as processed")
+            _cleanup_errors.append(f"Inbox messages processed update failed: {e}")
 
     # Clean up VM and browser for this task after conversation completes
     try:

@@ -3253,21 +3253,43 @@ class AIAgent:
         if worker_id and hasattr(self, "session_db") and self.session_db:
             import time
             def _poll(conn):
+                # 1. Recover stale claimed messages (older than 5 minutes)
+                conn.execute(
+                    "UPDATE agent_inbox SET status = 'unread' WHERE recipient_id = ? AND status = 'claimed' AND read_at < ?",
+                    (worker_id, time.time() - 300)
+                )
+                # 2. Fetch new unread
                 rows = conn.execute(
-                    "SELECT id, sender_id, message FROM agent_inbox WHERE recipient_id = ? AND status = 'unread' ORDER BY created_at ASC",
+                    "SELECT id, sender_id, task_id, message_type, message, structured_data FROM agent_inbox WHERE recipient_id = ? AND status = 'unread' ORDER BY created_at ASC",
                     (worker_id,)
                 ).fetchall()
                 if rows:
                     for row in rows:
-                        conn.execute("UPDATE agent_inbox SET status = 'read', read_at = ? WHERE id = ?", (time.time(), row["id"]))
+                        conn.execute("UPDATE agent_inbox SET status = 'claimed', read_at = ? WHERE id = ?", (time.time(), row["id"]))
                 return rows
             try:
                 rows = self.session_db._execute_write(_poll)
                 if rows:
+                    if not hasattr(self, "_claimed_inbox_ids"):
+                        self._claimed_inbox_ids = []
                     for row in rows:
+                        self._claimed_inbox_ids.append(row["id"])
                         sender = row["sender_id"]
                         msg = row["message"]
-                        inbox_messages.append(f"Incoming message from peer ({sender}): {msg}")
+                        m_type = row["message_type"]
+                        s_data = row["structured_data"]
+                        t_id = row["task_id"]
+                        
+                        parts = [f"Incoming message from peer ({sender}):"]
+                        if t_id:
+                            parts.append(f"Task ID: {t_id}")
+                        if m_type != "chat":
+                            parts.append(f"Type: {m_type}")
+                        parts.append(f"Content: {msg}")
+                        if s_data:
+                            parts.append(f"Structured Data: {s_data}")
+                            
+                        inbox_messages.append("\n".join(parts))
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"Failed to poll agent_inbox for {worker_id}: {e}")

@@ -84,18 +84,47 @@ class WorkerSupervisor:
                 if deps_json:
                     try:
                         deps = json.loads(deps_json)
-                        if deps:
-                            with self.db._read_ctx() as conn:
-                                placeholders = ",".join("?" for _ in deps)
-                                unfinished = conn.execute(
-                                    f"SELECT COUNT(*) FROM delegate_tasks WHERE id IN ({placeholders}) AND status != 'completed'",
-                                    deps
-                                ).fetchone()[0]
-                            if unfinished > 0:
-                                # Still blocked by dependencies
-                                continue
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Task {task_id}: malformed dependencies JSON. Marking as error.")
+                        def _mark_error(conn, err=e):
+                            conn.execute("UPDATE delegate_tasks SET status = 'error', error_text = ? WHERE id = ?", (f"Malformed dependencies JSON: {err}", task_id))
+                        self.db._execute_write(_mark_error)
+                        continue
+                        
+                    if deps:
+                        if task_id in deps:
+                            def _mark_self(conn):
+                                conn.execute("UPDATE delegate_tasks SET status = 'error', error_text = ? WHERE id = ?", ("Self dependency detected.", task_id))
+                            self.db._execute_write(_mark_self)
+                            continue
+                            
+                        # Fetch all dependency statuses
+                        with self.db._read_ctx() as conn:
+                            placeholders = ",".join("?" for _ in deps)
+                            rows = conn.execute(
+                                f"SELECT id, status FROM delegate_tasks WHERE id IN ({placeholders})",
+                                deps
+                            ).fetchall()
+                        
+                        dep_statuses = {r["id"]: r["status"] for r in rows}
+                        missing = [d for d in deps if d not in dep_statuses]
+                        if missing:
+                            def _mark_missing(conn, m=missing):
+                                conn.execute("UPDATE delegate_tasks SET status = 'error', error_text = ? WHERE id = ?", (f"Missing dependencies: {m}", task_id))
+                            self.db._execute_write(_mark_missing)
+                            continue
+                            
+                        failed_deps = [d for d, s in dep_statuses.items() if s in ('error', 'failed')]
+                        if failed_deps:
+                            def _mark_failed(conn, f=failed_deps):
+                                conn.execute("UPDATE delegate_tasks SET status = 'error', error_text = ? WHERE id = ?", (f"Dependency failed: {f}", task_id))
+                            self.db._execute_write(_mark_failed)
+                            continue
+                            
+                        unfinished = [d for d, s in dep_statuses.items() if s != 'completed']
+                        if unfinished:
+                            # Still blocked by dependencies, wait for them to finish
+                            continue
                 
                 if not worker_id:
                     # Find an idle worker of this role

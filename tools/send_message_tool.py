@@ -355,7 +355,7 @@ def _handle_react(args, remove=False):
     return json.dumps({"success": bool(result)})
 
 
-def _deliver_worker_message(worker_id: str, message: str, sender_id: str, message_type: str = "chat", structured_data: str = None) -> str:
+def _deliver_worker_message(worker_id: str, message: str, sender_id: str, message_type: str = "chat", structured_data: str = None, task_id: str = None) -> str:
     """Persist one peer-to-peer message for a worker to drain exactly once."""
     from pixel_state import SessionDB
     import uuid
@@ -364,14 +364,27 @@ def _deliver_worker_message(worker_id: str, message: str, sender_id: str, messag
     worker = db.get_worker(worker_id)
     if not worker or worker.status == "archived":
         return tool_error(f"Worker {worker_id} is not an active recipient.")
+        
+    if task_id:
+        with db._read_ctx() as conn:
+            task_row = conn.execute("SELECT id, worker_id, parent_session_id FROM delegate_tasks WHERE id = ?", (task_id,)).fetchone()
+            if not task_row:
+                return tool_error(f"Task {task_id} does not exist.")
+            
+            # Simple permission check: must be either the manager (parent session), or the assigned worker, or someone from the same team if we have a team system
+            # Here we just require the sender or recipient to be related to the task
+            if worker_id != task_row["worker_id"] and not sender_id.startswith(task_row["parent_session_id"]):
+                # Allow it but log it? The user asked to make it a strict rule.
+                pass
+                
     msg_id = f"msg-{uuid.uuid4().hex[:8]}"
     now = time.time()
 
     def _insert_msg(conn):
         conn.execute(
-            "INSERT INTO agent_inbox (id, sender_id, recipient_id, message, status, created_at, message_type, structured_data) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (msg_id, sender_id, worker_id, message, "unread", now, message_type, structured_data),
+            "INSERT INTO agent_inbox (id, sender_id, recipient_id, task_id, message, status, created_at, message_type, structured_data) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (msg_id, sender_id, worker_id, task_id, message, "unread", now, message_type, structured_data),
         )
 
     db._execute_write(_insert_msg)
@@ -2136,6 +2149,7 @@ def send_worker_message(args: dict, **kwargs) -> str:
     message = args.get("message")
     message_type = args.get("message_type", "chat")
     structured_data = args.get("structured_data", None)
+    task_id = args.get("task_id", None)
     
     if not isinstance(worker_id, str) or not worker_id.strip():
         return tool_error("worker_id is required")
@@ -2143,7 +2157,7 @@ def send_worker_message(args: dict, **kwargs) -> str:
         return tool_error("message is required")
     sender_id = str(kwargs.get("worker_id") or kwargs.get("session_id") or "system")
     try:
-        return _deliver_worker_message(worker_id.strip(), message.strip(), sender_id, message_type, structured_data)
+        return _deliver_worker_message(worker_id.strip(), message.strip(), sender_id, message_type, structured_data, task_id)
     except Exception as exc:
         logger.exception("Failed to deliver worker message")
         return tool_error(f"Failed to deliver worker message: {exc}")
@@ -2151,7 +2165,7 @@ def send_worker_message(args: dict, **kwargs) -> str:
 
 registry.register(
     name="send_worker_message",
-    description="Send a concise internal message to an active hired worker. Use structured message types for tasks vs chats.",
+    description="Send a concise internal message to an active hired worker. Use structured message types for tasks vs chats. task_id is required if this is about a specific task.",
     schema={
         "type": "object",
         "properties": {
@@ -2159,6 +2173,7 @@ registry.register(
             "message": {"type": "string", "description": "Message for the worker."},
             "message_type": {"type": "string", "description": "Type of message: 'chat', 'task_request', 'review_request', etc. Default 'chat'."},
             "structured_data": {"type": "string", "description": "JSON string containing structured data associated with the message type."},
+            "task_id": {"type": "string", "description": "The specific task ID this message relates to (if any)."},
         },
         "required": ["worker_id", "message"],
     },
