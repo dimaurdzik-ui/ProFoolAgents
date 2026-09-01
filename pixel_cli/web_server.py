@@ -182,7 +182,6 @@ def _resolve_restart_drain_timeout() -> float:
     except ImportError:
         from gateway.restart import DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
         return DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
-        return DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
 
 async def _worker_db_poller(app: "FastAPI"):
     import asyncio

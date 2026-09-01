@@ -299,6 +299,19 @@ CREATE TABLE IF NOT EXISTS async_delegations (
     delivery_claimed_at REAL
 );
 
+CREATE TABLE IF NOT EXISTS agent_inbox (
+    id TEXT PRIMARY KEY,
+    sender_id TEXT NOT NULL,
+    recipient_id TEXT NOT NULL,
+    task_id TEXT,
+    message TEXT NOT NULL,
+    message_type TEXT NOT NULL DEFAULT 'text',
+    structured_data TEXT,
+    created_at REAL NOT NULL,
+    read_at REAL,
+    status TEXT NOT NULL DEFAULT 'unread'
+);
+
 CREATE TABLE IF NOT EXISTS delegate_tasks (
     id TEXT PRIMARY KEY,
     parent_session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -312,7 +325,21 @@ CREATE TABLE IF NOT EXISTS delegate_tasks (
     deliverable TEXT,
     acceptance_criteria TEXT,
     deadline REAL,
-    priority INTEGER DEFAULT 0
+    priority INTEGER DEFAULT 0,
+    -- Columns for manual tool-approval flow (worker in 'manual' autonomy_mode)
+    modified_tool_args TEXT,
+    -- Columns for propose_hire_worker tool (agent requests adding a new worker)
+    pending_hire_template_id TEXT,
+    pending_hire_reason TEXT,
+    pending_hire_task TEXT,
+    parent_task_id TEXT REFERENCES delegate_tasks(id),
+    project_id TEXT,
+    dependencies_json TEXT,
+    input_json TEXT,
+    result_json TEXT,
+    error_text TEXT,
+    started_at REAL,
+    completed_at REAL
 );
 
 CREATE TABLE IF NOT EXISTS delegate_task_attempts (

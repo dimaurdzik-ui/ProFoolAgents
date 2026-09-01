@@ -247,8 +247,8 @@ TOOLSETS = {
     },
     
     "delegation": {
-        "description": "Spawn subagents with isolated context for complex subtasks",
-        "tools": ["delegate_task"],
+        "description": "Spawn subagents with isolated context for complex subtasks and team management",
+        "tools": ["delegate_task", "propose_task_delegation", "list_active_team", "propose_hire_worker", "send_worker_message"],
         "includes": []
     },
 
@@ -362,7 +362,7 @@ TOOLSETS = {
             "browser_vision", "browser_console", "browser_cdp", "browser_dialog",
             "todo", "memory",
             "session_search", "clarify",
-            "execute_code", "delegate_task",
+            "execute_code", "delegate_task", "propose_task_delegation", "list_active_team", "propose_hire_worker",
         ],
         "includes": [],
         # Posture toolset: selected per-session by agent/coding_context.py,
@@ -422,7 +422,7 @@ TOOLSETS = {
             # Session history search
             "session_search",
             # Code execution + delegation
-            "execute_code", "delegate_task",
+            "execute_code", "delegate_task", "propose_task_delegation", "list_active_team", "propose_hire_worker",
             # Cronjob management
             "cronjob",
             # Home Assistant smart home control (gated on HASS_TOKEN via check_fn)

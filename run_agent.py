@@ -3248,14 +3248,45 @@ class AIAgent:
         Safe to call from the agent execution thread after appending tool
         results. Returns None when no steer is pending.
         """
+        worker_id = getattr(self, "_session_init_model_config", {}).get("_office_worker_id")
+        inbox_messages = []
+        if worker_id and hasattr(self, "session_db") and self.session_db:
+            import time
+            def _poll(conn):
+                rows = conn.execute(
+                    "SELECT id, sender_id, message FROM agent_inbox WHERE recipient_id = ? AND status = 'unread' ORDER BY created_at ASC",
+                    (worker_id,)
+                ).fetchall()
+                if rows:
+                    for row in rows:
+                        conn.execute("UPDATE agent_inbox SET status = 'read', read_at = ? WHERE id = ?", (time.time(), row["id"]))
+                return rows
+            try:
+                rows = self.session_db._execute_write(_poll)
+                if rows:
+                    for row in rows:
+                        sender = row["sender_id"]
+                        msg = row["message"]
+                        inbox_messages.append(f"Incoming message from peer ({sender}): {msg}")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to poll agent_inbox for {worker_id}: {e}")
+
         _lock = getattr(self, "_pending_steer_lock", None)
         if _lock is None:
             text = getattr(self, "_pending_steer", None)
             self._pending_steer = None
-            return text
-        with _lock:
-            text = self._pending_steer
-            self._pending_steer = None
+        else:
+            with _lock:
+                text = self._pending_steer
+                self._pending_steer = None
+
+        if inbox_messages:
+            combined = "\n\n".join(inbox_messages)
+            if text:
+                return f"{text}\n\n{combined}"
+            return combined
+
         return text
 
     def _record_file_mutation_result(

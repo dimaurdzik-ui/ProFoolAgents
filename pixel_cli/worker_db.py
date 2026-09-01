@@ -55,6 +55,9 @@ def _init_schema(conn: sqlite3.Connection):
         pending_tool_name    TEXT,
         pending_tool_args    TEXT,
         modified_tool_args   TEXT,
+        pending_hire_template_id TEXT,
+        pending_hire_reason      TEXT,
+        pending_hire_task        TEXT,
         FOREIGN KEY(worker_id) REFERENCES workers(worker_id)
     )
     """)
@@ -68,6 +71,13 @@ def _init_schema(conn: sqlite3.Connection):
         
     try:
         cursor.execute("ALTER TABLE tasks ADD COLUMN modified_tool_args TEXT")
+    except sqlite3.OperationalError:
+        pass
+        
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN pending_hire_template_id TEXT")
+        cursor.execute("ALTER TABLE tasks ADD COLUMN pending_hire_reason TEXT")
+        cursor.execute("ALTER TABLE tasks ADD COLUMN pending_hire_task TEXT")
     except sqlite3.OperationalError:
         pass
         

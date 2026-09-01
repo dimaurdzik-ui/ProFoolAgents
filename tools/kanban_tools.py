@@ -257,8 +257,11 @@ def _goal_judge_available() -> bool:
 #   - No durable note on these auto-heartbeats; that's reserved for the
 #     explicit tool which carries a model-supplied note.
 
+import threading
+
 _AUTO_HEARTBEAT_MIN_INTERVAL_SECONDS = 60.0
 _auto_heartbeat_last_attempt: float = 0.0
+_auto_heartbeat_lock = threading.Lock()
 
 
 def heartbeat_current_worker_from_env() -> bool:
@@ -288,9 +291,12 @@ def heartbeat_current_worker_from_env() -> bool:
         return False
     import time as _time
     now = _time.monotonic()
-    if (now - _auto_heartbeat_last_attempt) < _AUTO_HEARTBEAT_MIN_INTERVAL_SECONDS:
-        return False
-    _auto_heartbeat_last_attempt = now
+    
+    with _auto_heartbeat_lock:
+        if (now - _auto_heartbeat_last_attempt) < _AUTO_HEARTBEAT_MIN_INTERVAL_SECONDS:
+            return False
+        _auto_heartbeat_last_attempt = now
+        
     try:
         kb, conn = _connect()
         try:
@@ -562,7 +568,7 @@ def _handle_complete(args: dict, **kw) -> str:
         try:
             metadata = json.loads(meta_json)
         except json.JSONDecodeError:
-            pass
+            metadata = {}
     created_cards = args.get("created_cards")
     artifacts = args.get("artifacts")
     if created_cards is not None:

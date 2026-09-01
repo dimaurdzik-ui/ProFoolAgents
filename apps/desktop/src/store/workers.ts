@@ -25,7 +25,7 @@ export interface WorkerTask {
   acceptance_criteria?: string
   priority: 'high' | 'low' | 'normal' | 'urgent'
   deadline_at?: number
-  status: 'approved' | 'done' | 'failed' | 'failed_permanently' | 'queued' | 'rejected' | 'waiting_approval' | 'waiting_tool_approval' | 'working'
+  status: 'approved' | 'completed' | 'done' | 'failed' | 'failed_permanently' | 'queued' | 'rejected' | 'waiting_approval' | 'waiting_hire_approval' | 'waiting_tool_approval' | 'working'
   result?: string
   last_error?: string
   retry_count: number
@@ -34,6 +34,9 @@ export interface WorkerTask {
   updated_at: number
   pending_tool_name?: string
   pending_tool_args?: string
+  pending_hire_template_id?: string
+  pending_hire_reason?: string
+  pending_hire_task?: string
 }
 
 export const $workers = atom<WorkerLive[]>([])

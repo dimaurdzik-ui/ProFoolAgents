@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -35,6 +36,50 @@ def test_team_cli_uses_session_db_and_archives_worker(fresh_db, capsys):
     assert "Archived worker cli-worker" in capsys.readouterr().out
     assert db.get_worker("cli-worker").status == "archived"
     db.close()
+
+
+def test_worker_messages_are_durable_and_delivered_once(fresh_db):
+    from tools.send_message_tool import send_worker_message
+
+    fresh_db.hire_worker("message-worker", "seo-specialist", "Message SEO")
+    fresh_db.update_worker("message-worker", {"status": "idle"})
+    result = json.loads(
+        send_worker_message(
+            {"worker_id": "message-worker", "message": "Please prioritize canonical URLs."},
+            session_id="parent-123",
+        )
+    )
+    assert result["success"] is True
+    with fresh_db._read_ctx() as conn:
+        rows = conn.execute(
+            "SELECT sender_id, message, status FROM agent_inbox WHERE recipient_id = ?",
+            ("message-worker",),
+        ).fetchall()
+    assert [dict(row) for row in rows] == [
+        {
+            "sender_id": "parent-123",
+            "message": "Please prioritize canonical URLs.",
+            "status": "unread",
+        }
+    ]
+    fresh_db.close()
+
+
+def test_orchestrator_template_exposes_only_coordination_tools():
+    from agent.agent_registry import get_agent_template
+    from run_agent import AIAgent
+
+    template = get_agent_template("pixel-team")
+    agent = AIAgent(
+        agent_id="pixel-team",
+        model="test-model",
+        provider="openai",
+        api_key="test-key",
+        base_url="https://api.openai.com/v1",
+        quiet_mode=True,
+    )
+    assert agent.valid_tool_names == set(template.allowed_tools)
+    assert "read_file" not in agent.valid_tool_names
 
 
 def test_cron_enqueues_worker_task_with_valid_parent_session(fresh_db, monkeypatch):
@@ -221,7 +266,10 @@ def test_worker_supervisor_inherits_profile_runtime_and_parent_session(
     )
 
     kwargs = captured["kwargs"]
-    assert kwargs["session_db"] is db
+    # Workers use a separate connection to the same profile DB so a
+    # supervisor shutdown cannot close an in-flight agent's connection.
+    assert kwargs["session_db"] is not db
+    assert kwargs["session_db"].db_path == db.db_path
     assert kwargs["parent_session_id"] == "parent-123"
     assert kwargs["provider"] == "openai"
     assert kwargs["model"] == "gpt-worker"
@@ -443,6 +491,72 @@ async def test_office_e2e(fresh_db, monkeypatch):
         ).fetchone()
     assert attempt["status"] == "rejected"
     assert attempt["review_feedback"] == "Need more keywords"
+    db.close()
+
+
+@pytest.mark.asyncio
+async def test_hiring_approval_workflow(fresh_db, monkeypatch):
+    """
+    Test the hiring request and approval workflow:
+    1. Orchestrator inserts a hiring request (waiting_hire_approval)
+    2. User approves hire
+    3. Worker is created
+    4. Worker is idle until the orchestrator delegates explicitly
+    5. A second approval cannot create a duplicate worker
+    """
+    from gateway.run import tasks_reject_hire
+    from tui_gateway import server as tui_server
+    db = fresh_db
+
+    # 1. Orchestrator proposes a hire via propose_hire_tool logic
+    def _insert_hire_request(conn):
+        now = time.time()
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, goal, status, handoff_mode, created_at, updated_at, pending_hire_template_id, pending_hire_reason, pending_hire_task) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("hire-task-1", "parent-123", "seo", "Analyze the homepage", "waiting_hire_approval", "smart", now, now, "seo-specialist", "Need an SEO expert", "Audit the homepage metadata and return a prioritized SEO report.")
+        )
+    db._execute_write(_insert_hire_request)
+
+    # 2. Verify task is in waiting_hire_approval
+    with db._read_ctx() as conn:
+        task = conn.execute("SELECT * FROM delegate_tasks WHERE id = 'hire-task-1'").fetchone()
+        assert task["status"] == "waiting_hire_approval"
+
+    # 3. User approves the hire
+    response = tui_server._methods["tasks.approve_hire"](1, {"task_id": "hire-task-1"})
+    assert response["result"]["success"] is True
+    worker_id = response["result"]["worker_id"]
+    duplicate = tui_server._methods["tasks.approve_hire"](2, {"task_id": "hire-task-1"})
+    assert duplicate["error"]["code"] == 409
+
+    # 4. Verify worker is created and approval did not auto-assign its task.
+    with db._read_ctx() as conn:
+        task = conn.execute("SELECT * FROM delegate_tasks WHERE id = 'hire-task-1'").fetchone()
+        assert task["status"] == "completed"
+        assert task["worker_id"] is None
+        worker = conn.execute("SELECT * FROM workers WHERE worker_id = ?", (worker_id,)).fetchone()
+        assert worker["display_name"] == "SEO Specialist"
+        assert worker["autonomy_mode"] == "smart"
+        assert worker["manager_id"] == "parent-123"
+
+    # 5. User rejects a hire request
+    def _insert_hire_request2(conn):
+        now = time.time()
+        conn.execute(
+            "INSERT INTO delegate_tasks (id, parent_session_id, worker_role, goal, status, handoff_mode, created_at, updated_at, pending_hire_template_id, pending_hire_reason) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("hire-task-2", "parent-123", "dev", "Code a feature", "waiting_hire_approval", "smart", now, now, "frontend-developer", "Need UI work")
+        )
+    db._execute_write(_insert_hire_request2)
+
+    response = await tasks_reject_hire({"task_id": "hire-task-2"})
+    assert response["success"] is True
+
+    # 6. Verify task is rejected
+    with db._read_ctx() as conn:
+        task = conn.execute("SELECT * FROM delegate_tasks WHERE id = 'hire-task-2'").fetchone()
+        assert task["status"] == "rejected"
     db.close()
 
 

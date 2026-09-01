@@ -1,8 +1,10 @@
 import { resolveGatewayWsUrl } from '@pixel-agents/shared'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { $officeSelectedWorkerId } from '@/store/workers'
+import { $officeSelectedWorkerId, type WorkerTask } from '@/store/workers'
 import { Codicon } from '@/components/ui/codicon'
+
+export type { WorkerTask } from '@/store/workers'
 
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { Button } from '@/components/ui/button'
@@ -27,20 +29,7 @@ interface Worker {
   worker_id: string
 }
 
-export interface WorkerTask {
-  acceptance_criteria?: null | string
-  deliverable?: null | string
-  goal: string
-  id: string
-  last_error?: null | string
-  result?: null | string
-  status: string
-  worker_id: string
-  worker_name?: null | string
-  priority?: string
-  pending_tool_name?: null | string
-  pending_tool_args?: null | string
-}
+
 
 interface AgentTemplate {
   description?: string
@@ -429,7 +418,7 @@ function StaffDirectory({ office }: { office: OfficeHook }) {
                         size="xs"
                         variant="default"
                       >
-                        {'Assign Task'}
+                        Assign Task
                       </Button>
                       <Button
                         onClick={() => setSelectedWorkerForDetail(worker)}
@@ -513,13 +502,13 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
 
   const pending = useMemo(
     () => office.data.tasks.filter(task => 
-      (task.status === 'waiting_approval' || task.status === 'waiting_tool_approval') &&
+      (task.status === 'waiting_approval' || task.status === 'waiting_tool_approval' || task.status === 'waiting_hire_approval') &&
       (priorityFilter === 'all' || task.priority === priorityFilter)
     ),
     [office.data.tasks, priorityFilter]
   )
 
-  const review = async (task: WorkerTask, action: 'approve' | 'approve_with_edits' | 'reject') => {
+  const review = async (task: WorkerTask, action: 'approve' | 'approve_with_edits' | 'reject' | 'approve_hire' | 'reject_hire') => {
     const note = feedback[task.id]?.trim() ?? ''
 
     if (action === 'reject' && !note) {
@@ -533,7 +522,9 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
 
     try {
       let rpcMethod = ''
-      if (task.status === 'waiting_tool_approval') {
+      if (action === 'approve_hire' || action === 'reject_hire') {
+        rpcMethod = action === 'approve_hire' ? 'tasks.approve_hire' : 'tasks.reject_hire'
+      } else if (task.status === 'waiting_tool_approval') {
         rpcMethod = action.startsWith('approve') ? 'tasks.approve_tool' : 'tasks.reject_tool'
       } else {
         rpcMethod = action.startsWith('approve') ? 'tasks.approve' : 'tasks.reject'
@@ -610,8 +601,16 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
                     {task.worker_name || task.worker_id} · {task.id}
                   </p>
                 </div>
-                {task.deliverable ? (
-                  <div>
+                {task.status === 'waiting_hire_approval' ? (
+                  <HireProposalWidget 
+                    task={task} 
+                    office={office} 
+                    onReview={review as any} 
+                  />
+                ) : (
+                  <>
+                    {task.deliverable ? (
+                      <div>
                     <p className="text-[0.6rem] font-medium uppercase tracking-wide text-muted-foreground/60">
                       {t.agents.deliverable}
                     </p>
@@ -661,19 +660,21 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
                   size="sm"
                   value={feedback[task.id] ?? ''}
                 />
-                <div className="flex justify-end gap-2">
-                  <Button disabled={busy} onClick={() => void review(task, 'reject')} size="sm" variant="secondary">
-                    {copy.reject}
-                  </Button>
-                  {task.status === 'waiting_tool_approval' && modifiedArgs[task.id] && modifiedArgs[task.id] !== task.pending_tool_args ? (
-                    <Button disabled={busy} onClick={() => void review(task, 'approve_with_edits')} size="sm" variant="outline">
-                      Approve with Edits
+                  <div className="flex justify-end gap-2">
+                    <Button disabled={busy} onClick={() => void review(task as any, 'reject')} size="sm" variant="secondary">
+                      {copy.reject}
                     </Button>
-                  ) : null}
-                  <Button disabled={busy} onClick={() => void review(task, 'approve')} size="sm">
-                    {copy.approve}
-                  </Button>
-                </div>
+                    {task.status === 'waiting_tool_approval' && modifiedArgs[task.id] && modifiedArgs[task.id] !== task.pending_tool_args ? (
+                      <Button disabled={busy} onClick={() => void review(task as any, 'approve_with_edits')} size="sm" variant="outline">
+                        Approve with Edits
+                      </Button>
+                    ) : null}
+                    <Button disabled={busy} onClick={() => void review(task as any, 'approve')} size="sm">
+                      {copy.approve}
+                    </Button>
+                  </div>
+                </>
+              )}
               </section>
             )
           })}
@@ -682,3 +683,5 @@ function ReviewInbox({ office }: { office: OfficeHook }) {
     </div>
   )
 }
+
+import { HireProposalWidget } from './hire-proposal-widget'

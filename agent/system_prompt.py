@@ -349,6 +349,12 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     if _env_hints:
         stable_parts.append(_env_hints)
 
+    # Ephemeral system prompt (e.g. worker role instructions). We place it here
+    # in the stable tier so it sits behind the Anthropic cache_control breakpoint
+    # and is not invalidated by volatile context (like cwd changes).
+    if getattr(agent, "ephemeral_system_prompt", None):
+        stable_parts.append(agent.ephemeral_system_prompt)
+
     # Coding posture (base Pixel Agents, any interactive coding surface in a code
     # workspace — see agent/coding_context.py). Keep the operating brief in
     # the cross-session-stable prefix, while placing the live git/workspace
@@ -517,6 +523,31 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
             _ext_mem_block = agent._memory_manager.build_system_prompt()
             if _ext_mem_block:
                 volatile_parts.append(_ext_mem_block)
+        except Exception:
+            pass
+
+    coordination_tools = {"list_active_team", "propose_hire_worker", "propose_task_delegation"}
+    if coordination_tools.intersection(getattr(agent, "valid_tool_names", set())):
+        try:
+            from pixel_state import SessionDB
+            db = SessionDB()
+            session_id = getattr(agent, "session_id", None)
+            active_workers = [
+                worker
+                for worker in db.list_workers()
+                if worker.status != "archived"
+                and (not session_id or worker.manager_id == session_id)
+            ]
+            staff_info = "<active-team-staff>\n"
+            if active_workers:
+                staff_info += "Current hired team members:\n"
+                for worker in active_workers:
+                    staff_info += f"- Worker ID: {worker.worker_id} | Name: {worker.display_name} | Role: {worker.template_id} | Status: {worker.status}\n"
+            else:
+                staff_info += "No other workers are currently hired. You are the only one on the team.\n"
+                staff_info += "If you need a different role to complete the task, use propose_hire_worker.\n"
+            staff_info += "</active-team-staff>"
+            volatile_parts.append(staff_info)
         except Exception:
             pass
 

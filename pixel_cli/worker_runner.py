@@ -2,8 +2,10 @@ import asyncio
 from typing import Optional
 
 from run_agent import AIAgent
-from pixel_cli.worker_db import connect, update_task, update_worker, create_task
+from pixel_cli.worker_db import connect, update_task, update_worker, create_task, list_workers
 from pixel_cli.worker_catalog import get_template
+import json
+import time
 
 class WorkerRunner:
     def __init__(self, db_profile: Optional[str] = None):
@@ -19,6 +21,7 @@ class WorkerRunner:
         worker = conn.execute("SELECT * FROM workers WHERE worker_id = ?", (worker_id,)).fetchone()
         if not worker:
             update_task(conn, task_id, 'error', status='failed', last_error='Worker not found')
+            conn.close()
             return
             
         # Load template
@@ -26,6 +29,7 @@ class WorkerRunner:
         if not template:
             update_task(conn, task_id, 'error', status='failed', last_error='Template not found')
             update_worker(conn, worker_id, status='error')
+            conn.close()
             return
             
         # Update statuses
@@ -36,14 +40,31 @@ class WorkerRunner:
         
         system_prompt = template.system_prompt
         
+        # Inject team awareness
+        try:
+            from pixel_state import SessionDB
+            db = SessionDB()
+            active_workers = [w for w in db.list_workers() if w.status != 'archived']
+            staff_info = "\n<active-team-staff>\n"
+            if active_workers:
+                staff_info += "Current hired team members:\n"
+                for w in active_workers:
+                    staff_info += f"- Worker ID: {w.worker_id} | Name: {w.display_name} | Role: {w.template_id} | Status: {w.status}\n"
+            else:
+                staff_info += "No other workers are currently hired. You are the only one on the team.\n"
+                staff_info += "If you need a different role to complete the task, you MUST use the propose_hire_worker tool.\n"
+            staff_info += "</active-team-staff>\n"
+        except Exception:
+            staff_info = "\n<active-team-staff>\nError loading team data.</active-team-staff>\n"
+        system_prompt += staff_info
+        
         user_message = f"Goal: {task['goal']}"
         if task.get('deliverable'):
             user_message += f"\nDeliverable: {task['deliverable']}"
         if task.get('acceptance_criteria'):
             user_message += f"\nAcceptance Criteria: {task['acceptance_criteria']}"
             
-        import json
-        import time
+
         
         def on_tool_start(*cb_args):
             if worker['autonomy_mode'] != 'manual':
@@ -65,7 +86,13 @@ class WorkerRunner:
             update_worker(conn, worker_id, status='idle')
             
             # Block until approved or rejected
+            start_time = time.time()
             while True:
+                if time.time() - start_time > 300: # 5 min timeout
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None, status='working')
+                    update_worker(conn, worker_id, status='working')
+                    raise Exception("Tool execution timed out waiting for user approval.")
+                    
                 time.sleep(1)
                 current = conn.execute("SELECT status, modified_tool_args FROM tasks WHERE id = ?", (task_id,)).fetchone()
                 status = current['status']
@@ -119,6 +146,8 @@ class WorkerRunner:
         except Exception as e:
             update_task(conn, task_id, 'error', status='failed', last_error=str(e))
             update_worker(conn, worker_id, status='error')
+        finally:
+            conn.close()
             
     def reject_and_retry(self, task_id: str, feedback: str) -> asyncio.Task:
         return asyncio.create_task(self._retry_worker_task(task_id, feedback))
@@ -128,6 +157,7 @@ class WorkerRunner:
         task = dict(conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone())
         
         if not task:
+            conn.close()
             return
             
         worker_id = task['worker_id']
@@ -135,6 +165,7 @@ class WorkerRunner:
         
         if retry_count > task['max_retries']:
             update_task(conn, task_id, 'status_change', status='failed_permanently')
+            conn.close()
             return
             
         update_task(conn, task_id, 'status_change', status='working', retry_count=retry_count)
@@ -159,8 +190,13 @@ class WorkerRunner:
             )
             update_worker(conn, worker_id, status='idle')
             
-            import time
+            start_time = time.time()
             while True:
+                if time.time() - start_time > 300: # 5 min timeout
+                    update_task(conn, task_id, pending_tool_name=None, pending_tool_args=None, modified_tool_args=None, status='working')
+                    update_worker(conn, worker_id, status='working')
+                    raise Exception("Tool execution timed out waiting for user approval.")
+                    
                 time.sleep(1)
                 current = conn.execute("SELECT status, modified_tool_args FROM tasks WHERE id = ?", (task_id,)).fetchone()
                 status = current['status']
@@ -212,3 +248,5 @@ class WorkerRunner:
         except Exception as e:
             update_task(conn, task_id, 'error', status='failed', last_error=str(e))
             update_worker(conn, worker_id, status='error')
+        finally:
+            conn.close()

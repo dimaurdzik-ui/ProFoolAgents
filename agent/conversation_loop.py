@@ -846,8 +846,6 @@ def _sync_failover_system_message(agent, api_messages, active_system_prompt):
         return active_system_prompt
     if api_messages and api_messages[0].get("role") == "system":
         effective = sp
-        if agent.ephemeral_system_prompt:
-            effective = (effective + "\n\n" + agent.ephemeral_system_prompt).strip()
         if not _rewrite_system_content_blocks(api_messages[0], effective):
             api_messages[0]["content"] = effective
     return sp
@@ -908,8 +906,9 @@ def _redecorate_prompt_cache_for_provider(
     then ``rebase_prepared_request`` re-attaches guidance outside the cached
     span.
     """
+    import copy
     messages: List[Dict[str, Any]] = [
-        dict(m) if isinstance(m, dict) else m for m in (api_messages or [])
+        copy.deepcopy(m) if isinstance(m, dict) else m for m in (api_messages or [])
     ]
     prepared = moa_prepared
     guidance = prepared.get("guidance") if isinstance(prepared, dict) else None
@@ -1340,42 +1339,33 @@ def run_conversation(
         # alternation, and there's no tool output to piggyback on.
         _pre_api_steer = agent._drain_pending_steer()
         if _pre_api_steer:
-            _injected = False
-            for _si in range(len(messages) - 1, -1, -1):
-                _sm = messages[_si]
-                if isinstance(_sm, dict) and _sm.get("role") == "tool":
-                    from agent.prompt_builder import format_steer_marker
-                    marker = format_steer_marker(_pre_api_steer)
-                    existing = _sm.get("content", "")
+            from agent.prompt_builder import format_steer_marker
+            marker = format_steer_marker(_pre_api_steer)
+            injected = False
+            for steer_index in range(len(messages) - 1, -1, -1):
+                steer_message = messages[steer_index]
+                if isinstance(steer_message, dict) and steer_message.get("role") == "tool":
+                    existing = steer_message.get("content", "")
                     if isinstance(existing, str):
-                        _sm["content"] = existing + marker
+                        steer_message["content"] = existing + marker
                     else:
-                        # Multimodal content blocks — append text block
-                        try:
-                            blocks = list(existing) if existing else []
-                            blocks.append({"type": "text", "text": marker})
-                            _sm["content"] = blocks
-                        except Exception:
-                            pass
-                    _injected = True
-                    logger.debug(
-                        "Pre-API-call steer drain: injected into tool msg at index %d",
-                        _si,
-                    )
+                        blocks = list(existing) if existing else []
+                        blocks.append({"type": "text", "text": marker})
+                        steer_message["content"] = blocks
+                    injected = True
+                    logger.debug("Pre-API-call steer drain: injected into tool message %d", steer_index)
                     break
-            if not _injected:
-                # No tool message to inject into — put it back so
-                # the post-tool-execution drain picks it up later.
-                _lock = getattr(agent, "_pending_steer_lock", None)
-                if _lock is not None:
-                    with _lock:
-                        if agent._pending_steer:
-                            agent._pending_steer = agent._pending_steer + "\n" + _pre_api_steer
-                        else:
-                            agent._pending_steer = _pre_api_steer
+            if not injected:
+                # Do not mutate a cached user turn or append a synthetic user
+                # message mid-loop.  The next post-tool drain will deliver it.
+                pending_lock = getattr(agent, "_pending_steer_lock", None)
+                if pending_lock is not None:
+                    with pending_lock:
+                        existing = agent._pending_steer
+                        agent._pending_steer = f"{existing}\n{_pre_api_steer}" if existing else _pre_api_steer
                 else:
                     existing = getattr(agent, "_pending_steer", None)
-                    agent._pending_steer = (existing + "\n" + _pre_api_steer) if existing else _pre_api_steer
+                    agent._pending_steer = f"{existing}\n{_pre_api_steer}" if existing else _pre_api_steer
 
         # Prepare messages for API call
         # If we have an ephemeral system prompt, prepend it to the messages
@@ -1550,8 +1540,6 @@ def run_conversation(
         # prefix into content blocks on the wire, but the stored string and
         # its byte-stability remain unchanged.
         effective_system = active_system_prompt or ""
-        if agent.ephemeral_system_prompt:
-            effective_system = (effective_system + "\n\n" + agent.ephemeral_system_prompt).strip()
         if effective_system:
             api_messages = [{"role": "system", "content": effective_system}] + api_messages
 
@@ -2071,7 +2059,7 @@ def run_conversation(
                     _redecorate_prompt_cache_for_provider(
                         agent,
                         api_messages,
-                        system_message=system_message,
+                        system_message=active_system_prompt,
                         moa_prepared=_moa_prepared_request,
                     )
                 )

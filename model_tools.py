@@ -165,8 +165,10 @@ def _run_async(coro):
             # can wind down instead of running forever.
             if loop_ready.wait(timeout=1.0) and worker_loop is not None:
                 try:
-                    for t in asyncio.all_tasks(worker_loop):
-                        worker_loop.call_soon_threadsafe(t.cancel)
+                    worker_loop.call_soon_threadsafe(
+                        lambda loop: [t.cancel() for t in asyncio.all_tasks(loop)],
+                        worker_loop,
+                    )
                 except RuntimeError:
                     # Loop already closed — nothing to cancel.
                     pass

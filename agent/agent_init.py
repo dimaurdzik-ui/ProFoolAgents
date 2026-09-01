@@ -588,7 +588,11 @@ def init_agent(
         template = get_agent_template(agent_id)
         if template:
             ephemeral_system_prompt = template.system_prompt
-            enabled_toolsets = template.allowed_tools
+            # Template ``allowed_tools`` contains concrete tool names, not
+            # toolset names.  Passing it as enabled_toolsets made resolution
+            # silently return an empty schema, leaving orchestrators unable
+            # to hire or delegate.  Apply it at the per-tool filter below.
+            allowed_tools = template.allowed_tools
 
     agent.ephemeral_system_prompt = ephemeral_system_prompt
     agent.platform = platform  # "cli", "telegram", "discord", "whatsapp", etc.
@@ -1399,10 +1403,18 @@ def init_agent(
         agent._tool_snapshot_generation = _snapshot_registry._generation
     except Exception:
         agent._tool_snapshot_generation = 0
+    fetch_enabled = None if allowed_tools is not None else enabled_toolsets
+    fetch_disabled = None if allowed_tools is not None else disabled_toolsets
+
     agent.tools = _ra().get_tool_definitions(
-        enabled_toolsets=enabled_toolsets,
-        disabled_toolsets=disabled_toolsets,
+        enabled_toolsets=fetch_enabled,
+        disabled_toolsets=fetch_disabled,
         quiet_mode=agent.quiet_mode,
+        # A template's explicit per-tool allow-list must be evaluated before
+        # tool_search collapses the general schema.  Otherwise non-core
+        # coordination tools can be deferred and then filtered to an empty
+        # list, making the orchestrator unable to hire or delegate.
+        skip_tool_search_assembly=allowed_tools is not None,
     )
     
     if allowed_tools is not None:

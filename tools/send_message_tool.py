@@ -218,7 +218,7 @@ SEND_MESSAGE_SCHEMA = {
             },
             "target": {
                 "type": "string",
-                "description": "Delivery target. Format: 'platform' (uses home channel), 'platform:#channel-name', 'platform:chat_id', or 'platform:chat_id:thread_id' for Telegram topics and Discord threads. Examples: 'telegram', 'telegram:-1001234567890:17585', 'discord:999888777:555444333', 'discord:#bot-home', 'slack:#engineering', 'signal:+155****4567', 'matrix:!roomid:server.org', 'matrix:@user:server.org', 'ntfy:alerts-channel' (explicit ntfy topic), 'yuanbao:direct:<account_id>' (DM), 'yuanbao:group:<group_code>' (group chat)"
+                "description": "Delivery target. Format: 'platform' (uses home channel), 'platform:#channel-name', 'platform:chat_id', 'worker:<worker_id>'. Examples: 'telegram', 'slack:#engineering', 'worker:designer-123'"
             },
             "message": {
                 "type": "string",
@@ -251,7 +251,7 @@ def send_message_tool(args, **kw):
     if action == "unreact":
         return _handle_react(args, remove=True)
 
-    return _handle_send(args)
+    return _handle_send(args, **kw)
 
 
 def _handle_list():
@@ -355,12 +355,43 @@ def _handle_react(args, remove=False):
     return json.dumps({"success": bool(result)})
 
 
-def _handle_send(args):
+def _deliver_worker_message(worker_id: str, message: str, sender_id: str, message_type: str = "chat", structured_data: str = None) -> str:
+    """Persist one peer-to-peer message for a worker to drain exactly once."""
+    from pixel_state import SessionDB
+    import uuid
+
+    db = SessionDB()
+    worker = db.get_worker(worker_id)
+    if not worker or worker.status == "archived":
+        return tool_error(f"Worker {worker_id} is not an active recipient.")
+    msg_id = f"msg-{uuid.uuid4().hex[:8]}"
+    now = time.time()
+
+    def _insert_msg(conn):
+        conn.execute(
+            "INSERT INTO agent_inbox (id, sender_id, recipient_id, message, status, created_at, message_type, structured_data) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (msg_id, sender_id, worker_id, message, "unread", now, message_type, structured_data),
+        )
+
+    db._execute_write(_insert_msg)
+    return json.dumps({"success": True, "note": f"Delivered to worker {worker_id} inbox", "message_id": msg_id})
+
+
+def _handle_send(args, **kw):
     """Send a message to a platform target."""
     target = args.get("target", "")
     message = args.get("message", "")
     if not target or not message:
         return tool_error("Both 'target' and 'message' are required when action='send'")
+
+    if target.startswith("worker:"):
+        worker_id = target[len("worker:"):]
+        try:
+            sender_id = kw.get("worker_id") or kw.get("session_id") or "system"
+            return _deliver_worker_message(worker_id, message, str(sender_id))
+        except Exception as e:
+            return json.dumps({"error": f"Failed to deliver to worker {worker_id}: {e}"})
 
     parts = target.split(":", 1)
     platform_name = parts[0].strip().lower()
@@ -2096,7 +2127,44 @@ async def _send_yuanbao(chat_id, message, media_files=None):
 
 
 # --- Registry ---
-from tools.registry import tool_error
+from tools.registry import registry, tool_error
+
+
+def send_worker_message(args: dict, **kwargs) -> str:
+    """Deliver an internal message to one hired worker."""
+    worker_id = args.get("worker_id")
+    message = args.get("message")
+    message_type = args.get("message_type", "chat")
+    structured_data = args.get("structured_data", None)
+    
+    if not isinstance(worker_id, str) or not worker_id.strip():
+        return tool_error("worker_id is required")
+    if not isinstance(message, str) or not message.strip():
+        return tool_error("message is required")
+    sender_id = str(kwargs.get("worker_id") or kwargs.get("session_id") or "system")
+    try:
+        return _deliver_worker_message(worker_id.strip(), message.strip(), sender_id, message_type, structured_data)
+    except Exception as exc:
+        logger.exception("Failed to deliver worker message")
+        return tool_error(f"Failed to deliver worker message: {exc}")
+
+
+registry.register(
+    name="send_worker_message",
+    description="Send a concise internal message to an active hired worker. Use structured message types for tasks vs chats.",
+    schema={
+        "type": "object",
+        "properties": {
+            "worker_id": {"type": "string", "description": "Recipient worker ID."},
+            "message": {"type": "string", "description": "Message for the worker."},
+            "message_type": {"type": "string", "description": "Type of message: 'chat', 'task_request', 'review_request', etc. Default 'chat'."},
+            "structured_data": {"type": "string", "description": "JSON string containing structured data associated with the message type."},
+        },
+        "required": ["worker_id", "message"],
+    },
+    handler=send_worker_message,
+    toolset="delegation",
+)
 
 # NOTE: ``send_message`` is intentionally NOT registered as an agent-callable
 # model tool. The agent should not decide on its own to fire off cross-platform

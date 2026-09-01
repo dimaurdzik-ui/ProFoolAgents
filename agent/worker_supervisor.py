@@ -6,14 +6,18 @@ import threading
 import time
 import uuid
 from pathlib import Path
+import weakref
 from typing import Optional
 
 from pixel_state import SessionDB
 from agent.agent_registry import get_agent_template
 
 logger = logging.getLogger(__name__)
+_supervisor_db_lock = threading.Lock()
 
 class WorkerSupervisor:
+    active_agents = weakref.WeakValueDictionary()
+    
     def __init__(
         self,
         poll_interval: float = 2.0,
@@ -52,50 +56,102 @@ class WorkerSupervisor:
     async def _poll_queue(self) -> list[asyncio.Task]:
         now = time.monotonic()
         if now - self._last_recovery >= min(60.0, self.claim_timeout / 2):
-            self._recover_stale_claims()
+            await asyncio.to_thread(self._recover_stale_claims)
             self._last_recovery = now
-        # 1. Fetch queued tasks
-        with self.db._read_ctx() as conn:
-            tasks = conn.execute(
-                "SELECT t.id, t.parent_session_id, t.worker_id, t.worker_role, "
-                "t.goal, t.status, "
-                "t.deliverable, t.acceptance_criteria, w.autonomy_mode "
-                "FROM delegate_tasks t JOIN workers w ON w.worker_id = t.worker_id "
-                "WHERE t.status = 'queued' AND w.archived_at IS NULL "
-                "AND w.status IN ('idle', 'onboarding') "
-                "ORDER BY t.priority DESC, t.created_at LIMIT 5"
-            ).fetchall()
+            
+        def _fetch_and_claim():
+            with self.db._read_ctx() as conn:
+                tasks = conn.execute(
+                    "SELECT t.id, t.parent_session_id, t.worker_id, t.worker_role, "
+                    "t.goal, t.status, t.dependencies_json, "
+                    "t.deliverable, t.acceptance_criteria "
+                    "FROM delegate_tasks t "
+                    "WHERE t.status = 'queued' "
+                    "ORDER BY t.priority DESC, t.created_at"
+                ).fetchall()
+            
+            if not tasks:
+                return []
+                
+            claimed = []
+            for t_row in tasks:
+                task_id = t_row["id"]
+                worker_id = t_row["worker_id"]
+                task = dict(t_row)
+                
+                # Check dependencies
+                deps_json = task.get("dependencies_json")
+                if deps_json:
+                    try:
+                        deps = json.loads(deps_json)
+                        if deps:
+                            with self.db._read_ctx() as conn:
+                                placeholders = ",".join("?" for _ in deps)
+                                unfinished = conn.execute(
+                                    f"SELECT COUNT(*) FROM delegate_tasks WHERE id IN ({placeholders}) AND status != 'completed'",
+                                    deps
+                                ).fetchone()[0]
+                            if unfinished > 0:
+                                # Still blocked by dependencies
+                                continue
+                    except Exception:
+                        pass
+                
+                if not worker_id:
+                    # Find an idle worker of this role
+                    with self.db._read_ctx() as conn:
+                        row = conn.execute(
+                            "SELECT worker_id, autonomy_mode FROM workers "
+                            "WHERE template_id = ? AND status IN ('idle', 'onboarding') AND archived_at IS NULL "
+                            "LIMIT 1",
+                            (task["worker_role"],)
+                        ).fetchone()
+                    if row:
+                        worker_id = row["worker_id"]
+                        task["worker_id"] = worker_id
+                        task["autonomy_mode"] = row["autonomy_mode"]
+                    else:
+                        continue
+                else:
+                    with self.db._read_ctx() as conn:
+                        row = conn.execute(
+                            "SELECT status, autonomy_mode FROM workers WHERE worker_id = ? AND archived_at IS NULL",
+                            (worker_id,)
+                        ).fetchone()
+                    if not row or row["status"] not in ('idle', 'onboarding'):
+                        continue
+                    task["autonomy_mode"] = row["autonomy_mode"]
+                
+                def _claim(conn, w_id, t_id):
+                    cursor = conn.execute(
+                        "UPDATE delegate_tasks SET status = 'working', worker_id = ?, updated_at = ? "
+                        "WHERE id = ? AND status = 'queued' AND NOT EXISTS ("
+                        "SELECT 1 FROM delegate_tasks active WHERE active.worker_id = ? "
+                        "AND active.status = 'working' AND active.id != ?)",
+                        (w_id, time.time(), t_id, w_id, t_id),
+                    )
+                    if cursor.rowcount:
+                        conn.execute(
+                            "UPDATE workers SET status = 'working' WHERE worker_id = ? "
+                            "AND archived_at IS NULL AND status IN ('idle', 'onboarding')",
+                            (w_id,),
+                        )
+                    return cursor.rowcount > 0
+                
+                with _supervisor_db_lock:
+                    if self.db._execute_write(lambda conn: _claim(conn, worker_id, task_id)):
+                        claimed.append(task)
+                        if len(claimed) >= 5:
+                            break
+            return claimed
 
-        if not tasks:
-            return []
+        claimed_tasks = await asyncio.to_thread(_fetch_and_claim)
 
         created_tasks: list[asyncio.Task] = []
-        for task in tasks:
+        for task in claimed_tasks:
             worker_id = task["worker_id"]
-            if not worker_id:
-                continue
-
-            def _claim(conn):
-                cursor = conn.execute(
-                    "UPDATE delegate_tasks SET status = 'working', updated_at = ? "
-                    "WHERE id = ? AND status = 'queued' AND NOT EXISTS ("
-                    "SELECT 1 FROM delegate_tasks active WHERE active.worker_id = ? "
-                    "AND active.status = 'working' AND active.id != ?)",
-                    (time.time(), task["id"], worker_id, task["id"]),
-                )
-                if cursor.rowcount:
-                    conn.execute(
-                        "UPDATE workers SET status = 'working' WHERE worker_id = ? "
-                        "AND archived_at IS NULL AND status IN ('idle', 'onboarding')",
-                        (worker_id,),
-                    )
-                return cursor.rowcount > 0
-
-            if not self.db._execute_write(_claim):
-                continue # Someone else claimed it
-
             logger.info(f"WorkerSupervisor: Assigned task {task['id']} to worker {worker_id}")
-            pending = asyncio.create_task(self._execute_worker_task(dict(task)))
+            pending = asyncio.create_task(self._execute_worker_task(task))
             self._active_tasks.add(pending)
             pending.add_done_callback(self._active_tasks.discard)
             created_tasks.append(pending)
@@ -171,16 +227,41 @@ class WorkerSupervisor:
                     ),
                 )
                 conn.execute(
-                    "UPDATE delegate_tasks SET status = ?, updated_at = ? WHERE id = ?",
-                    (next_status, now, task_id),
+                    "UPDATE delegate_tasks SET status = ?, updated_at = ?, completed_at = ?, result_json = ? WHERE id = ?",
+                    (
+                        next_status, 
+                        now, 
+                        now if next_status in ('completed', 'error') else None,
+                        json.dumps(result) if next_status in ('completed', 'error') else None,
+                        task_id
+                    ),
                 )
                 conn.execute(
                     "UPDATE workers SET status = ? WHERE worker_id = ? AND archived_at IS NULL",
                     ("idle" if successful else "error", worker_id),
                 )
                 return next_status
-            next_status = self.db._execute_write(_complete)
+            with _supervisor_db_lock:
+                next_status = self.db._execute_write(_complete)
             logger.info("WorkerSupervisor: Task %s entered %s", task_id, next_status)
+
+            parent = task.get("parent_session_id")
+            successful = bool(result.get("completed", True)) and not result.get("error")
+            try:
+                from agent.office_events import enqueue_office_completion
+
+                enqueue_office_completion(
+                    self.db,
+                    parent_session_id=parent,
+                    task_id=task_id,
+                    worker_id=worker_id,
+                    goal=goal,
+                    status="completed" if successful else "failed",
+                    summary=result.get("final_response", ""),
+                    error=result.get("error", ""),
+                )
+            except Exception:
+                logger.exception("Failed to enqueue Office completion for %s", task_id)
 
         except Exception as e:
             logger.error(f"Error executing task {task_id}: {e}")
@@ -196,13 +277,14 @@ class WorkerSupervisor:
         try:
             while True:
                 await asyncio.sleep(self.heartbeat_interval)
-                self.db._execute_write(
-                    lambda conn: conn.execute(
-                        "UPDATE delegate_tasks SET updated_at = ? "
-                        "WHERE id = ? AND status = 'working'",
-                        (time.time(), task_id),
+                with _supervisor_db_lock:
+                    self.db._execute_write(
+                        lambda conn: conn.execute(
+                            "UPDATE delegate_tasks SET updated_at = ? "
+                            "WHERE id = ? AND status = 'working'",
+                            (time.time(), task_id),
+                        )
                     )
-                )
         except asyncio.CancelledError:
             return
 
@@ -223,7 +305,8 @@ class WorkerSupervisor:
             )
             return cursor.rowcount
 
-        recovered = self.db._execute_write(_recover)
+        with _supervisor_db_lock:
+            recovered = self.db._execute_write(_recover)
         if recovered:
             logger.warning("WorkerSupervisor recovered %d stale task claim(s)", recovered)
         return recovered
@@ -354,6 +437,13 @@ class WorkerSupervisor:
         profile_home = Path(self.db.db_path).expanduser().resolve().parent
         home_token = set_pixel_agents_home_override(profile_home)
         secret_token = None
+        # Each worker agent gets its OWN SessionDB instance.
+        # Previously all workers shared self.db (the supervisor's connection).
+        # When supervisor.close() was called (e.g. on atexit or restart), it set
+        # self.db._conn = None, causing 'NoneType has no attribute execute' in
+        # every agent that was still running. Per-worker DBs are isolated from
+        # the supervisor lifecycle and from each other.
+        worker_db: Optional[SessionDB] = None
         try:
             secret_token = set_secret_scope(build_profile_secret_scope(profile_home))
             runtime, cfg = self._resolve_worker_runtime(parent_session_id)
@@ -380,10 +470,17 @@ class WorkerSupervisor:
                     else None
                 )
 
+            # Open a dedicated DB connection for this worker so it is completely
+            # isolated from self.db (the supervisor's connection) and from sibling
+            # workers. The agent writes its session rows through this connection;
+            # the supervisor continues to update delegate_tasks/workers through
+            # self.db without any cross-connection race.
+            worker_db = SessionDB()
+
             agent = AIAgent(
                 session_id=f"office-{worker.worker_id}",
                 parent_session_id=parent_session_id,
-                session_db=self.db,
+                session_db=worker_db,
                 platform="subagent",
                 model=model,
                 provider=runtime.get("provider"),
@@ -403,7 +500,7 @@ class WorkerSupervisor:
                     f"You are {worker.display_name}, a persistent {template.name} in an AI office.\n\n"
                     f"{template.system_prompt}"
                 ),
-                allowed_tools=template.allowed_tools,
+                allowed_tools=list(dict.fromkeys([*template.allowed_tools, "send_worker_message"])),
                 skip_memory=False,
                 quiet_mode=True,
             )
@@ -414,6 +511,11 @@ class WorkerSupervisor:
                 }
             )
 
+            # Register in active_agents so send_message_tool can find and steer it
+            WorkerSupervisor.active_agents[worker.worker_id] = agent
+
+            # Initial message queue processing logic
+            history = []
             contract = []
             if deliverable:
                 contract.append(f"EXPECTED DELIVERABLE: {deliverable}")
@@ -443,9 +545,21 @@ class WorkerSupervisor:
             if secret_token is not None:
                 reset_secret_scope(secret_token)
             reset_pixel_agents_home_override(home_token)
+            # Close the worker's own DB connection now that the task is done.
+            # The supervisor's self.db remains open for its own bookkeeping.
+            if worker_db is not None:
+                try:
+                    worker_db.close()
+                except Exception:
+                    pass
+
 
     def _fail_task(self, task_id, reason):
+        parent_session_id = None
+        worker_id = None
+        goal = ""
         def _fail(conn):
+            nonlocal parent_session_id, worker_id, goal
             now = time.time()
             attempt_id = "attempt-" + uuid.uuid4().hex[:8]
             row = conn.execute("SELECT MAX(attempt_number) as max_attempt FROM delegate_task_attempts WHERE task_id = ?", (task_id,)).fetchone()
@@ -459,13 +573,33 @@ class WorkerSupervisor:
                 "INSERT INTO delegate_task_attempts (id, task_id, attempt_number, status, result, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (attempt_id, task_id, attempt_num, 'error', reason, now)
             )
-            row = conn.execute("SELECT worker_id FROM delegate_tasks WHERE id = ?", (task_id,)).fetchone()
-            if row and row["worker_id"]:
-                conn.execute(
-                    "UPDATE workers SET status = 'error' WHERE worker_id = ? AND archived_at IS NULL",
-                    (row["worker_id"],),
-                )
-        self.db._execute_write(_fail)
+            row = conn.execute("SELECT worker_id, parent_session_id, goal FROM delegate_tasks WHERE id = ?", (task_id,)).fetchone()
+            if row:
+                worker_id = row["worker_id"]
+                parent_session_id = row["parent_session_id"]
+                goal = row["goal"] or ""
+                if worker_id:
+                    conn.execute(
+                        "UPDATE workers SET status = 'error' WHERE worker_id = ? AND archived_at IS NULL",
+                        (worker_id,),
+                    )
+        with _supervisor_db_lock:
+            self.db._execute_write(_fail)
+
+        try:
+            from agent.office_events import enqueue_office_completion
+
+            enqueue_office_completion(
+                self.db,
+                parent_session_id=parent_session_id,
+                task_id=task_id,
+                worker_id=worker_id,
+                goal=goal,
+                status="failed",
+                error=reason,
+            )
+        except Exception:
+            logger.exception("Failed to enqueue Office failure for %s", task_id)
 
 
 _service_lock = threading.Lock()

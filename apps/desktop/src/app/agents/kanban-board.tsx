@@ -10,7 +10,7 @@ interface KanbanBoardProps {
 const COLUMNS = [
   { id: 'todo', title: 'To Do', statuses: ['queued', 'pending'] },
   { id: 'in_progress', title: 'In Progress', statuses: ['working'] },
-  { id: 'review', title: 'Review', statuses: ['waiting_approval', 'waiting_tool_approval'] },
+  { id: 'review', title: 'Review', statuses: ['waiting_approval', 'waiting_tool_approval', 'waiting_hire_approval'] },
   { id: 'done', title: 'Done', statuses: ['completed', 'failed', 'failed_permanently', 'rejected'] },
 ]
 

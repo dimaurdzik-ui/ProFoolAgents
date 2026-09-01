@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProductName — Заголовок ціннісної пропозиції</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ===== NAVIGATION ===== -->
+  <header class="nav">
+    <div class="container nav__inner">
+      <a href="/" class="nav__logo" aria-label="ProductName — на головну">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="var(--color-primary-500)"/>
+          <path d="M10 22V10l12 6-12 6Z" fill="white"/>
+        </svg>
+        <span class="nav__brand">ProductName</span>
+      </a>
+      <nav class="nav__links" aria-label="Основна навігація">
+        <a href="#features">Можливості</a>
+        <a href="#how-it-works">Як працює</a>
+        <a href="#pricing">Ціни</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav__actions">
+        <a href="#" class="btn btn--ghost">Увійти</a>
+        <a href="#" class="btn btn--primary">Почати безкоштовно</a>
+      </div>
+      <button class="nav__burger" type="button" aria-label="Відкрити меню" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ===== SECTION 1: HERO ===== -->
+    <section class="hero" aria-labelledby="hero-headline">
+      <div class="hero__bg-decor" aria-hidden="true">
+        <div class="hero__blob"></div>
+        <div class="hero__grid"></div>
+      </div>
+      <div class="container hero__content">
+        <span class="badge">🚀 Новий реліз 2.0 вже доступний</span>
+        <h1 id="hero-headline" class="hero__headline">
+          Створюйте кращі продукти<br>
+          <span class="text-gradient">швидше, ніж будь-коли</span>
+        </h1>
+        <p class="hero__subtitle">
+          Універсальна платформа для дизайну, прототипування
+          та співпраці. Без зайвих інструментів. Без хаосу.
+        </p>
+        <div class="hero__cta">
+          <a href="#" class="btn btn--primary btn--lg">Почати безкоштовно</a>
+          <a href="#" class="btn btn--outline btn--lg">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
+            Дивитись демо
+          </a>
+        </div>
+        <div class="hero__stats">
+          <div class="hero__stat"><strong>10k+</strong><span>активних команд</span></div>
+          <div class="hero__stat"><strong>4.9</strong><span>рейтинг на ProductHunt</span></div>
+          <div class="hero__stat"><strong>98%</strong><span>клієнтів рекомендують</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 2: FEATURES ===== -->
+    <section id="features" class="features" aria-labelledby="features-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-header__label">Можливості</span>
+          <h2 id="features-heading" class="section-header__title">Усе, що потрібно для роботи</h2>
+          <p class="section-header__desc">Жодних зайвих функцій. Лише те, що справді прискорює роботу.</p>
+        </div>
+        <div class="features__grid">
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--blue">⚡</div>
+            <h3 class="feature-card__title">Миттєва синхронізація</h3>
+            <p class="feature-card__desc">Зміни з'являються в реальному часі в усіх учасників команди. Жодних конфліктів версій.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--green">🧩</div>
+            <h3 class="feature-card__title">Гнучкі компоненти</h3>
+            <p class="feature-card__desc">Бібліотека з 200+ готових UI-компонентів. Збирайте інтерфейси як конструктор.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--purple">🔒</div>
+            <h3 class="feature-card__title">Корпоративна безпека</h3>
+            <p class="feature-card__desc">SSO, RBAC, шифрування на рівні банків. SOC 2 Type II та GDPR compliant.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--amber">📊</div>
+            <h3 class="feature-card__title">Аналітика та звіти</h3>
+            <p class="feature-card__desc">Вбудовані дашборди з key metrics. Експорт у PDF, CSV або Google Sheets.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--rose">🎨</div>
+            <h3 class="feature-card__title">Дизайн-система з коробки</h3>
+            <p class="feature-card__desc">Токени, теми, світлий і темний режим. Кастомізується під ваш бренд за 5 хвилин.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+          <article class="feature-card">
+            <div class="feature-card__icon feature-card__icon--cyan">🔄</div>
+            <h3 class="feature-card__title">API та інтеграції</h3>
+            <p class="feature-card__desc">REST + GraphQL API. Готові конектори до Slack, Jira, Figma, GitHub та 50+ сервісів.</p>
+            <a href="#" class="feature-card__link">Дізнатись більше →</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 3: HOW IT WORKS ===== -->
+    <section id="how-it-works" class="steps" aria-labelledby="steps-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-header__label">Як це працює</span>
+          <h2 id="steps-heading" class="section-header__title">Від ідеї до результату за 4 кроки</h2>
+        </div>
+        <div class="steps__flow">
+          <div class="step">
+            <div class="step__number">1</div>
+            <div class="step__connector" aria-hidden="true"></div>
+            <h3 class="step__title">Реєстрація команди</h3>
+            <p class="step__desc">Запрошуйте учасників за email або через Google-акаунт. До 5 осіб — безкоштовно.</p>
+          </div>
+          <div class="step">
+            <div class="step__number">2</div>
+            <div class="step__connector" aria-hidden="true"></div>
+            <h3 class="step__title">Налаштування проєкту</h3>
+            <p class="step__desc">Оберіть шаблон або почніть з нуля. Підключіть потрібні інтеграції за 2 кліки.</p>
+          </div>
+          <div class="step">
+            <div class="step__number">3</div>
+            <div class="step__connector" aria-hidden="true"></div>
+            <h3 class="step__title">Спільна робота</h3>
+            <p class="step__desc">Дизайнери, розробники, менеджери — усі працюють в одному просторі в реальному часі.</p>
+          </div>
+          <div class="step">
+            <div class="step__number">4</div>
+            <h3 class="step__title">Реліз та аналітика</h3>
+            <p class="step__desc">Публікуйте результати, відстежуйте метрики й отримуйте фідбек автоматично.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 4: TESTIMONIALS ===== -->
+    <section class="testimonials" aria-labelledby="testimonials-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-header__label">Відгуки</span>
+          <h2 id="testimonials-heading" class="section-header__title">Нам довіряють команди з усього світу</h2>
+        </div>
+        <section class="testimonials__logos" aria-label="Компанії, які нам довіряють">
+          <span class="testimonials__logo">Acme Corp</span>
+          <span class="testimonials__logo">TechFlow</span>
+          <span class="testimonials__logo">DesignPro</span>
+          <span class="testimonials__logo">StartupX</span>
+          <span class="testimonials__logo">CloudBase</span>
+        </section>
+        <div class="testimonials__grid">
+          <blockquote class="testimonial">
+            <p class="testimonial__text">"ProductName змінив наш підхід до дизайну. Швидкість роботи зросла вдвічі, а кількість помилок скоротилась на 60%."</p>
+            <footer class="testimonial__author">
+              <div class="testimonial__avatar" aria-hidden="true">ОК</div>
+              <div>
+                <cite class="testimonial__name">Олексій Коваленко</cite>
+                <span class="testimonial__role">CTO, Acme Corp</span>
+              </div>
+            </footer>
+          </blockquote>
+          <blockquote class="testimonial">
+            <p class="testimonial__text">"Нарешті знайшли інструмент, де дизайнери й розробники розуміють одне одного без зайвих мітингів."</p>
+            <footer class="testimonial__author">
+              <div class="testimonial__avatar" aria-hidden="true">МШ</div>
+              <div>
+                <cite class="testimonial__name">Марія Шевченко</cite>
+                <span class="testimonial__role">Design Lead, TechFlow</span>
+              </div>
+            </footer>
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 5: PRICING ===== -->
+    <section id="pricing" class="pricing" aria-labelledby="pricing-heading">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-header__label">Ціни</span>
+          <h2 id="pricing-heading" class="section-header__title">Прозорі тарифи без прихованих платежів</h2>
+        </div>
+        <div class="pricing__grid">
+          <article class="pricing-card">
+            <h3 class="pricing-card__name">Starter</h3>
+            <p class="pricing-card__price">$0<span>/міс</span></p>
+            <p class="pricing-card__desc">Для невеликих команд, які тільки починають.</p>
+            <ul class="pricing-card__features">
+              <li>До 5 учасників</li>
+              <li>3 активні проєкти</li>
+              <li>Базова бібліотека компонентів</li>
+              <li>Спільнота підтримка</li>
+            </ul>
+            <a href="#" class="btn btn--outline btn--full">Почати безкоштовно</a>
+          </article>
+          <article class="pricing-card pricing-card--featured">
+            <span class="pricing-card__badge">Найпопулярніший</span>
+            <h3 class="pricing-card__name">Pro</h3>
+            <p class="pricing-card__price">$29<span>/міс</span></p>
+            <p class="pricing-card__desc">Для професійних команд з великими проєктами.</p>
+            <ul class="pricing-card__features">
+              <li>До 50 учасників</li>
+              <li>Необмежена кількість проєктів</li>
+              <li>Повна бібліотека (200+ компонентів)</li>
+              <li>Пріоритетна підтримка 24/7</li>
+              <li>API доступ</li>
+            </ul>
+            <a href="#" class="btn btn--primary btn--full">Спробувати безкоштовно</a>
+          </article>
+          <article class="pricing-card">
+            <h3 class="pricing-card__name">Enterprise</h3>
+            <p class="pricing-card__price">Індивідуально</p>
+            <p class="pricing-card__desc">Для великих організацій з особливими вимогами.</p>
+            <ul class="pricing-card__features">
+              <li>Безліміт учасників</li>
+              <li>SSO та SAML</li>
+              <li>Виділений сервер</li>
+              <li>Персональний менеджер</li>
+              <li>SLA 99.9%</li>
+            </ul>
+            <a href="#" class="btn btn--outline btn--full">Зв'язатися з нами</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 6: FAQ ===== -->
+    <section id="faq" class="faq" aria-labelledby="faq-heading">
+      <div class="container">
+        <div class="section-header">
+          <h2 id="faq-heading" class="section-header__title">Часті запитання</h2>
+        </div>
+        <div class="faq__list">
+          <details class="faq__item" open>
+            <summary class="faq__question">Чи можна змінити тарифний план пізніше?</summary>
+            <p class="faq__answer">Так, ви можете змінити тариф у будь-який момент. При переході на вищий тариф різниця списується пропорційно до кінця періоду.</p>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__question">Як відбувається оплата?</summary>
+            <p class="faq__answer">Ми приймаємо Visa, Mastercard, Apple Pay та Google Pay. Для Enterprise-клієнтів доступна оплата за рахунком.</p>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__question">Чи є пробний період?</summary>
+            <p class="faq__answer">Так, ви отримуєте 14 днів повного доступу до Pro-тарифу без прив'язки картки. Скасувати можна в будь-який момент.</p>
+          </details>
+          <details class="faq__item">
+            <summary class="faq__question">Чи підтримуєте ви міграцію з інших платформ?</summary>
+            <p class="faq__answer">Так, у нас є інструменти для імпорту даних з Figma, Sketch, Adobe XD, Jira, Asana та інших платформ. Міграція займає від 5 хвилин до кількох годин залежно від обсягу даних.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SECTION 7: FINAL CTA ===== -->
+    <section class="cta-final" aria-labelledby="cta-final-heading">
+      <div class="cta-final__bg" aria-hidden="true"></div>
+      <div class="container cta-final__content">
+        <h2 id="cta-final-heading" class="cta-final__title">Готові спробувати?</h2>
+        <p class="cta-final__desc">Приєднуйтесь до 10 000+ команд, які вже працюють швидше.</p>
+        <div class="cta-final__actions">
+          <a href="#" class="btn btn--primary btn--lg">Почати безкоштовно</a>
+          <span class="cta-final__note">Безкоштовно 14 днів. Без прив'язки картки.</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== SECTION 8: FOOTER ===== -->
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div class="footer__brand">
+        <a href="/" class="nav__logo" aria-label="ProductName — на головну">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="var(--color-primary-500)"/>
+            <path d="M10 22V10l12 6-12 6Z" fill="white"/>
+          </svg>
+          <span class="nav__brand">ProductName</span>
+        </a>
+        <p class="footer__tagline">Створюйте кращі продукти швидше.</p>
+      </div>
+      <nav class="footer__col" aria-label="Продукт">
+        <h4>Продукт</h4>
+        <a href="#features">Можливості</a>
+        <a href="#pricing">Ціни</a>
+        <a href="#">Оновлення</a>
+        <a href="#">Дорожня карта</a>
+      </nav>
+      <nav class="footer__col" aria-label="Ресурси">
+        <h4>Ресурси</h4>
+        <a href="#">Документація</a>
+        <a href="#">API</a>
+        <a href="#">Блог</a>
+        <a href="#">Спільнота</a>
+      </nav>
+      <nav class="footer__col" aria-label="Компанія">
+        <h4>Компанія</h4>
+        <a href="#">Про нас</a>
+        <a href="#">Контакти</a>
+        <a href="#">Політика конфіденційності</a>
+        <a href="#">Умови використання</a>
+      </nav>
+    </div>
+    <div class="container footer__bottom">
+      <p>&copy; 2026 ProductName. Усі права захищені.</p>
+      <div class="footer__social">
+        <a href="#" aria-label="Twitter" class="footer__social-link">
+          <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+        <a href="#" aria-label="GitHub" class="footer__social-link">
+          <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        </a>
+        <a href="#" aria-label="LinkedIn" class="footer__social-link">
+          <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

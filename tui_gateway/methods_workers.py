@@ -39,8 +39,8 @@ def _(rid, params: dict) -> dict:
         worker = db.hire_worker(worker_id, template_id, display_name or template.name, autonomy_mode, manager_id)
         db.update_worker(worker_id, {"status": "idle"})
         worker = db.get_worker(worker_id)
-        from agent.worker_supervisor import ensure_worker_supervisor_started
 
+        from agent.worker_supervisor import ensure_worker_supervisor_started
         ensure_worker_supervisor_started()
         return _ok(rid, {"worker": worker.__dict__})
     except Exception as e:
@@ -96,6 +96,10 @@ def _(rid, params: dict) -> dict:
 
     db = SessionDB()
     try:
+        worker = db.get_worker(worker_id)
+        if not worker:
+            return _err(rid, 404, "Worker not found")
+
         if db.archive_worker(worker_id):
             return _ok(rid, {"success": True})
         return _err(rid, 404, "Worker not found")
@@ -114,6 +118,28 @@ def _(rid, params: dict) -> dict:
         return _ok(rid, {"workers": [w.__dict__ for w in workers]})
     except Exception as e:
         return _err(rid, 500, str(e))
+
+
+@method("tasks.approve_hire")
+@_profile_scoped
+def _(rid, params: dict) -> dict:
+    from agent.office_hiring import approve_hire_request
+
+    result = approve_hire_request(params.get("task_id"))
+    if not result.get("success"):
+        return _err(rid, 409, result.get("error", "Could not approve hire"))
+    return _ok(rid, result)
+
+
+@method("tasks.reject_hire")
+@_profile_scoped
+def _(rid, params: dict) -> dict:
+    from agent.office_hiring import reject_hire_request
+
+    result = reject_hire_request(params.get("task_id"))
+    if not result.get("success"):
+        return _err(rid, 409, result.get("error", "Could not reject hire"))
+    return _ok(rid, result)
 
 @method("tasks.approve")
 @_profile_scoped

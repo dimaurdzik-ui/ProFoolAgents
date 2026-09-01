@@ -2380,14 +2380,25 @@ def _run_single_child(
                     db.ensure_session(t_parent_session_id, source=getattr(parent_agent, "platform", None) or "delegation")
 
                     def _insert(conn):
+                        deps_json = json.dumps(getattr(child, "_task_dependencies", []))
+                        proj_id = getattr(child, "_task_project_id", None)
+                        p_task_id = getattr(parent_agent, "_current_task_id", None)
+                        
+                        input_payload = {
+                            "goal": goal,
+                            "context": context,
+                        }
+                        
                         conn.execute(
                             "INSERT INTO delegate_tasks "
-                            "(id, parent_session_id, worker_role, worker_id, goal, status, handoff_mode, "
-                            "deliverable, acceptance_criteria, created_at, updated_at) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "(id, parent_session_id, parent_task_id, project_id, worker_role, worker_id, goal, status, handoff_mode, "
+                            "deliverable, acceptance_criteria, dependencies_json, input_json, started_at, created_at, updated_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                             (
                                 child_task_id,
                                 t_parent_session_id,
+                                p_task_id,
+                                proj_id,
                                 getattr(child, "_delegate_role", "unknown"),
                                 worker_id,
                                 goal,
@@ -2395,6 +2406,9 @@ def _run_single_child(
                                 handoff,
                                 deliverable,
                                 criteria_json,
+                                deps_json,
+                                json.dumps(input_payload),
+                                now, # started_at (it's queued but office systems often record started_at when submitted)
                                 now,
                                 now,
                             ),
@@ -3328,7 +3342,16 @@ def delegate_task(
                 template = get_agent_template(worker.template_id)
             else:
                 template = get_agent_template(str(worker_id))
-                if template and template.id != TEAM_AGENT_ID:
+                
+            # Permission check: ensure parent can delegate to this template
+            parent_template_id = getattr(parent_agent, "_session_init_model_config", {}).get("_office_template_id")
+            if parent_template_id:
+                parent_template = get_agent_template(parent_template_id)
+                if parent_template and parent_template.delegates_to:
+                    if template and template.id not in parent_template.delegates_to:
+                        return tool_error(f"Task {i}: Agent '{parent_template.name}' is not authorized to delegate to '{template.name}'. Allowed delegates: {parent_template.delegates_to}")
+            
+            if template and template.id != TEAM_AGENT_ID and worker is None:
                     worker = db.find_worker_by_template(template.id)
                     if worker is None:
                         # First use of a profession creates one persistent staff member.
@@ -3430,6 +3453,20 @@ def delegate_task(
             )
             child._live_transcript_path = str(_writer.path)
         children.append((i, t, child))
+        
+    for i, t, child in children:
+        child._task_project_id = t.get("project_id")
+        deps_indices = t.get("dependencies", [])
+        child._task_dependencies = []
+        if isinstance(deps_indices, list):
+            for dep_idx in deps_indices:
+                if isinstance(dep_idx, int) and 0 <= dep_idx < len(children):
+                    dep_child = children[dep_idx][2]
+                    dep_sid = getattr(dep_child, "_subagent_id", None)
+                    if dep_sid:
+                        child._task_dependencies.append(dep_sid)
+                elif isinstance(dep_idx, str):
+                    child._task_dependencies.append(dep_idx)
 
     def _execute_and_aggregate(*, honor_parent_interrupt: bool = True) -> dict:
         """Run all built children (1 or N), join on them, aggregate results,
@@ -4399,6 +4436,15 @@ DELEGATE_TASK_SCHEMA = {
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Observable conditions the deliverable must satisfy before it is handed back.",
+                        },
+                        "dependencies": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "Array of 0-based indices referring to other tasks in this batch that must complete before this one starts.",
+                        },
+                        "project_id": {
+                            "type": "string",
+                            "description": "Optional project identifier to group related tasks.",
                         },
                     },
                     "required": ["goal"],

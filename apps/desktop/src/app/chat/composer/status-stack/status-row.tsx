@@ -98,12 +98,18 @@ export const StatusItemRow = memo(function StatusItemRow({ item, onDismiss, onOp
   const failed = item.state === 'failed'
   const running = item.state === 'running'
 
-  const action =
-    item.type === 'background'
-      ? running
-        ? onStop && { label: s.stop, onClick: () => onStop(item.id) }
-        : onDismiss && { label: s.dismiss, onClick: () => onDismiss(item.id) }
-      : null
+  let action: { label: string; icon: string; onClick: () => void } | null = null
+
+  if (item.type === 'background') {
+    if (running && onStop) {
+      action = { label: s.stop, icon: 'close', onClick: () => onStop(item.id) }
+    } else if (!running && onDismiss) {
+      action = { label: s.dismiss, icon: 'close', onClick: () => onDismiss(item.id) }
+    }
+  } else if (item.type === 'subagent' && item.id.startsWith('office-') && running && onStop) {
+    // We repurpose onStop as onPause for worker subagents to avoid changing too many props
+    action = { label: 'Pause', icon: 'debug-pause', onClick: () => onStop(item.id) }
+  }
 
   const canOpen = item.type === 'subagent' && !!onOpen
 
@@ -124,13 +130,13 @@ export const StatusItemRow = memo(function StatusItemRow({ item, onDismiss, onOp
                 className="-my-1 size-4 rounded-md text-muted-foreground/60 hover:text-foreground/90"
                 onClick={event => {
                   event.stopPropagation()
-                  action.onClick()
+                  action!.onClick()
                 }}
                 size="icon-xs"
                 type="button"
                 variant="ghost"
               >
-                <Codicon name="close" size="0.75rem" />
+                <Codicon name={action.icon} size="0.75rem" />
               </Button>
             </Tip>
           ) : canOpen ? (

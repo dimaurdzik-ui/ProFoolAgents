@@ -25781,91 +25781,273 @@ def rpc_method(method_name: str):
         return func
     return decorator
 
-from pixel_cli.worker_db import connect, hire_worker, list_workers, update_worker, archive_worker, create_task, list_tasks, update_task
-from pixel_cli.worker_catalog import load_catalog
+# ---------------------------------------------------------------------------
+# Worker / Task RPC methods — all backed by SessionDB (state.db) so that
+# WorkerSupervisor (agent/worker_supervisor.py) can see every change.
+#
+# IMPORTANT: The old pixel_cli.worker_db (workers.db) is no longer used here.
+# We keep pixel_cli.worker_catalog for the legacy template format only.
+# ---------------------------------------------------------------------------
+
+import time as _rpc_time
+import uuid as _rpc_uuid
+import logging as _rpc_logging
+
+_rpc_logger = _rpc_logging.getLogger(__name__)
+
 
 @rpc_method("workers.list")
 async def workers_list(params: dict) -> dict:
-    conn = connect()
-    return {"workers": list_workers(conn)}
+    from pixel_state import SessionDB
+    db = SessionDB()
+    workers = db.list_workers(include_archived=params.get("include_archived", False))
+    return {"workers": [
+        {
+            "worker_id": w.worker_id,
+            "template_id": w.template_id,
+            "display_name": w.display_name,
+            "status": w.status,
+            "autonomy_mode": w.autonomy_mode,
+            "manager_id": w.manager_id,
+            "created_at": w.created_at,
+            "archived_at": w.archived_at,
+        }
+        for w in workers
+    ]}
+
 
 @rpc_method("workers.hire")
 async def workers_hire(params: dict) -> dict:
-    conn = connect()
-    worker = hire_worker(
-        conn,
-        params["worker_id"],
-        params["template_id"],
-        params["display_name"],
-        params.get("autonomy_mode", "smart"),
-        params.get("manager_id")
+    from pixel_state import SessionDB
+    db = SessionDB()
+    worker = db.hire_worker(
+        worker_id=params["worker_id"],
+        template_id=params["template_id"],
+        display_name=params["display_name"],
+        autonomy_mode=params.get("autonomy_mode", "smart"),
+        manager_id=params.get("manager_id"),
     )
-    return {"worker": worker}
+    return {
+        "worker": {
+            "worker_id": worker.worker_id,
+            "template_id": worker.template_id,
+            "display_name": worker.display_name,
+            "status": worker.status,
+            "autonomy_mode": worker.autonomy_mode,
+        }
+    }
+
 
 @rpc_method("workers.update")
 async def workers_update(params: dict) -> dict:
-    conn = connect()
-    update_worker(conn, params["worker_id"], **params.get("updates", {}))
-    return {"success": True}
+    from pixel_state import SessionDB
+    db = SessionDB()
+    success = db.update_worker(params["worker_id"], params.get("updates", {}))
+    return {"success": success}
+
 
 @rpc_method("workers.archive")
 async def workers_archive(params: dict) -> dict:
-    conn = connect()
-    archive_worker(conn, params["worker_id"])
-    return {"success": True}
+    from pixel_state import SessionDB
+    db = SessionDB()
+    success = db.archive_worker(params["worker_id"])
+    return {"success": success}
+
 
 @rpc_method("tasks.list")
 async def tasks_list(params: dict) -> dict:
-    conn = connect()
-    return {"tasks": list_tasks(conn, params.get("worker_id"), params.get("status"))}
+    """List delegate_tasks from SessionDB."""
+    from pixel_state import SessionDB
+    db = SessionDB()
+    worker_id = params.get("worker_id")
+    status = params.get("status")
+
+    with db._read_ctx() as conn:
+        query = "SELECT * FROM delegate_tasks"
+        conditions = []
+        query_params = []
+        if worker_id:
+            conditions.append("worker_id = ?")
+            query_params.append(worker_id)
+        if status:
+            conditions.append("status = ?")
+            query_params.append(status)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, query_params).fetchall()
+
+    return {"tasks": [dict(row) for row in rows]}
+
 
 @rpc_method("tasks.create")
 async def tasks_create(params: dict) -> dict:
-    conn = connect()
-    import time
-    task_id = params.get("task_id", str(time.time()))
-    task = create_task(conn, task_id, params["worker_id"], params["goal"], **params)
-    
-    # Spawn worker
-    from pixel_cli.worker_runner import WorkerRunner
-    WorkerRunner().spawn(params["worker_id"], task_id)
-    
-    return {"task": task}
+    """Create a delegate_task in SessionDB and let WorkerSupervisor pick it up."""
+    from pixel_state import SessionDB
+    from agent.worker_supervisor import ensure_worker_supervisor_started
+    db = SessionDB()
+
+    task_id = params.get("task_id") or f"task-{_rpc_uuid.uuid4().hex[:8]}"
+    worker_id = params["worker_id"]
+    goal = params["goal"]
+    deliverable = params.get("deliverable")
+    import json as _json
+    criteria = params.get("acceptance_criteria")
+    criteria_json = _json.dumps(criteria) if criteria else None
+    now = _rpc_time.time()
+
+    def _insert(conn):
+        conn.execute(
+            "INSERT INTO delegate_tasks "
+            "(id, parent_session_id, worker_role, worker_id, goal, status, "
+            "handoff_mode, deliverable, acceptance_criteria, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                task_id,
+                params.get("parent_session_id", "gateway"),
+                params.get("worker_role", ""),
+                worker_id,
+                goal,
+                "queued",
+                params.get("handoff_mode", "smart"),
+                deliverable,
+                criteria_json,
+                now,
+                now,
+            ),
+        )
+
+    db._execute_write(_insert)
+    ensure_worker_supervisor_started()
+    _rpc_logger.info("tasks.create: queued task %s for worker %s", task_id, worker_id)
+    return {"task": {"id": task_id, "worker_id": worker_id, "goal": goal, "status": "queued"}}
+
 
 @rpc_method("tasks.approve")
 async def tasks_approve(params: dict) -> dict:
-    conn = connect()
-    update_task(conn, params["task_id"], "status_change", status="done")
+    """Mark a waiting_approval task as completed."""
+    from pixel_state import SessionDB
+    db = SessionDB()
+    now = _rpc_time.time()
+
+    def _approve(conn):
+        conn.execute(
+            "UPDATE delegate_tasks SET status = 'completed', updated_at = ? WHERE id = ?",
+            (now, params["task_id"]),
+        )
+
+    db._execute_write(_approve)
     return {"success": True}
+
 
 @rpc_method("tasks.reject")
 async def tasks_reject(params: dict) -> dict:
-    conn = connect()
-    from pixel_cli.worker_runner import WorkerRunner
-    WorkerRunner().reject_and_retry(params["task_id"], params.get("feedback", ""))
+    """Reject a task and re-queue it so the worker retries with feedback."""
+    from pixel_state import SessionDB
+    from agent.worker_supervisor import ensure_worker_supervisor_started
+    db = SessionDB()
+    now = _rpc_time.time()
+    feedback = params.get("feedback", "")
+
+    def _reject(conn):
+        # Re-queue the task with incremented priority so the worker gets feedback
+        row = conn.execute(
+            "SELECT worker_id, worker_role, parent_session_id, goal FROM delegate_tasks WHERE id = ?",
+            (params["task_id"],),
+        ).fetchone()
+        if not row:
+            return
+
+        new_goal = f"{row['goal']}\n\n[RETRY FEEDBACK]: {feedback}" if feedback else row["goal"]
+        conn.execute(
+            "UPDATE delegate_tasks SET status = 'queued', goal = ?, updated_at = ? WHERE id = ?",
+            (new_goal, now, params["task_id"]),
+        )
+        # Ensure the worker is idle so supervisor claims it again
+        if row["worker_id"]:
+            conn.execute(
+                "UPDATE workers SET status = 'idle' WHERE worker_id = ? AND archived_at IS NULL",
+                (row["worker_id"],),
+            )
+
+    db._execute_write(_reject)
+    ensure_worker_supervisor_started()
     return {"success": True}
+
 
 @rpc_method("tasks.approve_tool")
 async def tasks_approve_tool(params: dict) -> dict:
-    conn = connect()
+    """Approve a pending tool call for a worker in manual mode."""
+    from pixel_state import SessionDB
+    db = SessionDB()
     modified_args = params.get("modified_args")
-    if modified_args is not None:
-        import json
-        update_task(conn, params["task_id"], "status_change", status="working", modified_tool_args=json.dumps(modified_args))
-    else:
-        update_task(conn, params["task_id"], "status_change", status="working")
+    now = _rpc_time.time()
+
+    def _approve_tool(conn):
+        if modified_args is not None:
+            import json as _json
+            conn.execute(
+                "UPDATE delegate_tasks SET status = 'working', "
+                "modified_tool_args = ?, updated_at = ? WHERE id = ?",
+                (_json.dumps(modified_args), now, params["task_id"]),
+            )
+        else:
+            conn.execute(
+                "UPDATE delegate_tasks SET status = 'working', updated_at = ? WHERE id = ?",
+                (now, params["task_id"]),
+            )
+
+    db._execute_write(_approve_tool)
     return {"success": True}
+
+
+@rpc_method("tasks.approve_hire")
+async def tasks_approve_hire(params: dict) -> dict:
+    """Approve one pending hire request and wake its requesting session.
+
+    Approval only creates the worker.  The orchestrator must make a separate,
+    explicit delegation after it has the new worker ID.
+    """
+    from agent.office_hiring import approve_hire_request
+
+    result = approve_hire_request(params.get("task_id"))
+    if result.get("success"):
+        _rpc_logger.info("tasks.approve_hire: hired %s", result["worker_id"])
+    return result
+
+
+@rpc_method("tasks.reject_hire")
+async def tasks_reject_hire(params: dict) -> dict:
+    """Reject a pending hire request — mark the hire request task as failed."""
+    from agent.office_hiring import reject_hire_request
+
+    return reject_hire_request(params.get("task_id"))
+
 
 @rpc_method("tasks.reject_tool")
 async def tasks_reject_tool(params: dict) -> dict:
-    conn = connect()
-    update_task(conn, params["task_id"], "status_change", status="rejected")
+    """Reject a pending tool call — worker will see an exception and must recover."""
+    from pixel_state import SessionDB
+    db = SessionDB()
+    now = _rpc_time.time()
+
+    def _reject_tool(conn):
+        conn.execute(
+            "UPDATE delegate_tasks SET status = 'tool_rejected', updated_at = ? WHERE id = ?",
+            (now, params["task_id"]),
+        )
+
+    db._execute_write(_reject_tool)
     return {"success": True}
+
 
 @rpc_method("agents.catalog")
 async def agents_catalog(params: dict) -> dict:
-    templates = load_catalog()
+    """Return all agent templates from AgentRegistry (config/agents/*.yaml)."""
+    from agent.agent_registry import get_all_agent_templates
+    templates = get_all_agent_templates()
     return {"catalog": [t.to_dict() for t in templates]}
+
 
 if __name__ == "__main__":
     main()
